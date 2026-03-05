@@ -5,6 +5,7 @@ class TranscriptSegment(BaseModel):
     text: str
     full_text: str
     timestamp: str
+    speaker: str = ""
 
 
 class TranscriptUpdate(BaseModel):

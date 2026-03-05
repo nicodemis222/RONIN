@@ -28,6 +28,13 @@ struct TranscriptPanelView: View {
                                     .foregroundColor(.matrixFaded)
                                     .frame(width: 55, alignment: .leading)
 
+                                if !segment.speaker.isEmpty {
+                                    Text(segment.speakerShortLabel)
+                                        .font(.matrixBadge)
+                                        .foregroundColor(segment.speakerColor)
+                                        .frame(width: 24, alignment: .leading)
+                                }
+
                                 Text(segment.text)
                                     .font(.matrixBody)
                                     .foregroundColor(.matrixText)

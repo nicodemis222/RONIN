@@ -233,10 +233,14 @@ struct ContentView: View {
                 .background(Color.matrixBlack)
                 .confirmationDialog("End Meeting?", isPresented: $copilotViewModel.showEndConfirmation) {
                     Button("End Meeting", role: .destructive) {
-                        copilotViewModel.endMeeting()
-                        dismissWindow(id: "copilot-overlay")
-                        copilotViewModel.overlayVisible = false
-                        appState.phase = .postMeeting
+                        // Defer everything to next run-loop tick to avoid
+                        // "Publishing changes from within view updates"
+                        DispatchQueue.main.async { [self] in
+                            copilotViewModel.endMeeting()
+                            dismissWindow(id: "copilot-overlay")
+                            copilotViewModel.overlayVisible = false
+                            appState.phase = .postMeeting
+                        }
                     }
                     Button("Cancel", role: .cancel) { }
                 } message: {

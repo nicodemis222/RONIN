@@ -4,6 +4,7 @@ import re
 
 import httpx
 
+from app.config import settings
 from app.services.prompt_builder import PromptBuilder
 from app.schemas.copilot import CopilotResponse
 from app.schemas.summary import MeetingSummary
@@ -180,10 +181,114 @@ def _normalize_summary(data: dict) -> dict:
 
 
 class LLMClient:
+    # Default budgets (overridden by detect_context_length → _calibrate_budgets)
+    DEFAULT_COPILOT_BUDGET = 6000
+    DEFAULT_SUMMARY_BUDGET = 12000
+
     def __init__(self, base_url: str = "http://localhost:1234/v1"):
         self.base_url = base_url
         self.client = httpx.AsyncClient(timeout=120.0)
         self.prompt_builder = PromptBuilder()
+        self._detected_context: int | None = None
+        self._copilot_budget: int = self.DEFAULT_COPILOT_BUDGET
+        self._summary_budget: int = self.DEFAULT_SUMMARY_BUDGET
+
+    async def detect_context_length(self) -> int:
+        """Query LM Studio for the loaded model's context length.
+
+        Uses LM Studio's internal API (/api/v1/models) which exposes the
+        actual configured context_length and the model's max_context_length.
+        Falls back to the OpenAI-compatible /v1/models endpoint, then to
+        a conservative default.
+        """
+        base = self.base_url.replace("/v1", "")  # e.g. http://localhost:1234
+
+        n_ctx = None
+        max_ctx = None
+        model_id = "unknown"
+
+        # ── Strategy 1: LM Studio internal API (most reliable) ────────
+        try:
+            resp = await self.client.get(f"{base}/api/v1/models", timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                for model in data.get("models", []):
+                    instances = model.get("loaded_instances", [])
+                    if instances:
+                        model_id = model.get("key", model.get("display_name", "unknown"))
+                        config = instances[0].get("config", {})
+                        n_ctx = config.get("context_length")
+                        max_ctx = model.get("max_context_length")
+                        break
+        except Exception as e:
+            logger.debug(f"LM Studio internal API not available: {e}")
+
+        # ── Strategy 2: OpenAI-compatible /v1/models ──────────────────
+        if not n_ctx:
+            try:
+                resp = await self.client.get(f"{self.base_url}/models", timeout=5.0)
+                resp.raise_for_status()
+                models = resp.json()
+                if models.get("data"):
+                    model = models["data"][0]
+                    model_id = model.get("id", "unknown")
+                    n_ctx = (
+                        model.get("context_length")
+                        or model.get("max_context_length")
+                        or model.get("context_window")
+                    )
+            except Exception as e:
+                logger.debug(f"OpenAI models endpoint failed: {e}")
+
+        # ── Apply result ──────────────────────────────────────────────
+        if n_ctx:
+            n_ctx = int(n_ctx)
+            logger.info(f"Detected model '{model_id}' context length: {n_ctx:,} tokens")
+
+            # If the model supports much more context than configured, log a hint
+            if max_ctx and int(max_ctx) > n_ctx * 4:
+                logger.warning(
+                    f"⚡ Model supports up to {int(max_ctx):,} tokens but n_ctx is only {n_ctx:,}. "
+                    f"For 1-hour meetings, increase context length in LM Studio to at least 16,384."
+                )
+        else:
+            n_ctx = 4096
+            logger.warning(
+                f"Could not detect context length for '{model_id}' — "
+                f"assuming {n_ctx:,}. Set n_ctx in LM Studio for best results."
+            )
+
+        self._detected_context = n_ctx
+        self._copilot_budget, self._summary_budget = self._calibrate_budgets(n_ctx)
+        logger.info(
+            f"Budget calibrated: copilot={self._copilot_budget:,} chars, "
+            f"summary={self._summary_budget:,} chars"
+        )
+        return n_ctx
+
+    @staticmethod
+    def _calibrate_budgets(n_ctx: int) -> tuple[int, int]:
+        """Calculate transcript char budgets from the model's context length.
+
+        Heuristic: ~4 chars per token, reserve ~30% for system prompt + notes + output.
+        Copilot budget is ~half of summary (copilot only needs recent context).
+
+        Returns (copilot_budget, summary_budget).
+        """
+        # Available tokens for transcript ≈ 70% of context
+        available_tokens = int(n_ctx * 0.7)
+        # Convert to chars (~4 chars per token for English)
+        available_chars = available_tokens * 4
+
+        # Summary gets the full available budget; copilot gets half
+        summary_budget = min(available_chars, 60000)  # Cap at 60K chars
+        copilot_budget = min(summary_budget // 2, 30000)  # Cap at 30K chars
+
+        # Floor to prevent tiny budgets
+        copilot_budget = max(copilot_budget, 1000)
+        summary_budget = max(summary_budget, 2000)
+
+        return copilot_budget, summary_budget
 
     async def _chat_completion(self, messages: list[dict], temperature: float,
                                 max_tokens: int) -> str:
@@ -226,47 +331,94 @@ class LLMClient:
     async def generate_copilot_response(
         self, transcript_window: str, config, relevant_notes: str
     ) -> CopilotResponse:
-        messages = self.prompt_builder.build_copilot_prompt(
-            transcript_window=transcript_window,
-            config=config,
-            relevant_notes=relevant_notes,
-        )
+        max_chars = self._copilot_budget  # Calibrated from detected context length
 
-        try:
-            # 1200 tokens: thinking is suppressed via assistant prefix,
-            # so all tokens go to the actual JSON response
-            content = await self._chat_completion(messages, temperature=0.7, max_tokens=1200)
-            data = _extract_json(content)
-            data = _normalize_copilot(data)
-            result = CopilotResponse(**data)
-            logger.info(
-                f"Copilot: {len(result.suggestions)} suggestions, "
-                f"{len(result.follow_up_questions)} questions, "
-                f"{len(result.risks)} risks"
+        # Retry loop: if the prompt exceeds the model's context,
+        # halve the transcript budget and try again.
+        for attempt in range(3):
+            messages = self.prompt_builder.build_copilot_prompt(
+                transcript_window=transcript_window,
+                config=config,
+                relevant_notes=relevant_notes,
+                max_transcript_chars=max_chars,
             )
-            return result
-        except Exception as e:
-            logger.error(f"Copilot generation failed: {e}", exc_info=True)
-            return CopilotResponse()
+            try:
+                content = await self._chat_completion(messages, temperature=0.7, max_tokens=1200)
+                data = _extract_json(content)
+                data = _normalize_copilot(data)
+                result = CopilotResponse(**data)
+                logger.info(
+                    f"Copilot: {len(result.suggestions)} suggestions, "
+                    f"{len(result.follow_up_questions)} questions, "
+                    f"{len(result.risks)} risks"
+                )
+                return result
+            except httpx.HTTPStatusError as e:
+                body = ""
+                try:
+                    body = e.response.text[:500]
+                except Exception:
+                    pass
+                if e.response.status_code == 400 and "n_keep" in body:
+                    max_chars = max_chars // 2
+                    logger.warning(
+                        f"Copilot prompt exceeds model context — retrying with "
+                        f"max_transcript_chars={max_chars} (attempt {attempt + 2}/3)"
+                    )
+                    continue
+                logger.error(f"Copilot generation failed: {e}", exc_info=True)
+                return CopilotResponse()
+            except Exception as e:
+                logger.error(f"Copilot generation failed: {e}", exc_info=True)
+                return CopilotResponse()
+
+        logger.error("Copilot generation failed after 3 context-length retries")
+        return CopilotResponse()
 
     async def generate_summary(
         self, transcript: str, config, notes: str
     ) -> MeetingSummary:
-        messages = self.prompt_builder.build_summary_prompt(
-            transcript=transcript,
-            config=config,
-            notes=notes,
-        )
+        max_chars = self._summary_budget  # Calibrated from detected context length
 
-        try:
-            # 2000 tokens: thinking is suppressed via assistant prefix
-            content = await self._chat_completion(messages, temperature=0.3, max_tokens=2000)
-            data = _extract_json(content)
-            data = _normalize_summary(data)
-            return MeetingSummary(**data)
-        except Exception as e:
-            logger.error(f"Summary generation failed: {e}", exc_info=True)
-            raise RuntimeError(f"Failed to generate summary: {e}")
+        # Retry loop: if the prompt still exceeds the model's context,
+        # halve the transcript budget and try again (up to 3 attempts).
+        last_error = None
+        for attempt in range(3):
+            messages = self.prompt_builder.build_summary_prompt(
+                transcript=transcript,
+                config=config,
+                notes=notes,
+                max_transcript_chars=max_chars,
+            )
+            try:
+                content = await self._chat_completion(messages, temperature=0.3, max_tokens=2000)
+                data = _extract_json(content)
+                data = _normalize_summary(data)
+                return MeetingSummary(**data)
+            except httpx.HTTPStatusError as e:
+                body = ""
+                try:
+                    body = e.response.text[:500]
+                except Exception:
+                    pass
+                # Detect context-length overflow and retry with shorter transcript
+                if e.response.status_code == 400 and "n_keep" in body:
+                    max_chars = max_chars // 2
+                    logger.warning(
+                        f"Transcript exceeds model context — retrying with "
+                        f"max_transcript_chars={max_chars} (attempt {attempt + 2}/3)"
+                    )
+                    last_error = e
+                    continue
+                logger.error(f"Summary generation failed: {e}", exc_info=True)
+                raise RuntimeError(f"Failed to generate summary: {e}")
+            except Exception as e:
+                logger.error(f"Summary generation failed: {e}", exc_info=True)
+                raise RuntimeError(f"Failed to generate summary: {e}")
+
+        raise RuntimeError(
+            f"Failed to generate summary after 3 context-length retries: {last_error}"
+        )
 
     async def close(self):
         await self.client.aclose()

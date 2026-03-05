@@ -19,9 +19,14 @@ class MeetingSession:
     def append_transcript(self, segment: TranscriptSegment):
         self.transcript_segments.append(segment)
 
+    @staticmethod
+    def _format_segment(s) -> str:
+        speaker_tag = f" {s.speaker}:" if s.speaker else ""
+        return f"[{s.timestamp}]{speaker_tag} {s.text}"
+
     @property
     def full_transcript(self) -> str:
-        return "\n".join(f"[{s.timestamp}] {s.text}" for s in self.transcript_segments)
+        return "\n".join(self._format_segment(s) for s in self.transcript_segments)
 
     def get_recent_transcript(self, minutes: float | None = None) -> str:
         if not self.transcript_segments:
@@ -32,7 +37,7 @@ class MeetingSession:
         segments_per_minute = 20  # ~3 seconds per segment
         count = int(minutes * segments_per_minute)
         recent = self.transcript_segments[-count:]
-        return "\n".join(f"[{s.timestamp}] {s.text}" for s in recent)
+        return "\n".join(self._format_segment(s) for s in recent)
 
 
 class MeetingStateManager:

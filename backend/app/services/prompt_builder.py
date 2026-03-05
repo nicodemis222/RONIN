@@ -136,7 +136,8 @@ SUMMARY_RESPONSE_SCHEMA = {
 
 class PromptBuilder:
     def build_copilot_prompt(
-        self, transcript_window: str, config, relevant_notes: str
+        self, transcript_window: str, config, relevant_notes: str,
+        max_transcript_chars: int = 6000,
     ) -> list[dict]:
         system = COPILOT_SYSTEM_PROMPT.format(
             meeting_title=config.title,
@@ -144,6 +145,15 @@ class PromptBuilder:
             constraints=config.constraints or "None specified",
             relevant_notes=relevant_notes or "No notes loaded",
         )
+
+        # Truncate transcript to fit model context.
+        # For copilot, keep only the tail (most recent conversation).
+        if len(transcript_window) > max_transcript_chars:
+            transcript_window = (
+                "[... earlier transcript omitted ...]\n\n"
+                + transcript_window[-max_transcript_chars:]
+            )
+
         return [
             {"role": "system", "content": system},
             {
@@ -157,12 +167,26 @@ class PromptBuilder:
         ]
 
     def build_summary_prompt(
-        self, transcript: str, config, notes: str
+        self, transcript: str, config, notes: str,
+        max_transcript_chars: int = 12000,
     ) -> list[dict]:
         system = SUMMARY_SYSTEM_PROMPT.format(
             meeting_title=config.title,
             meeting_goal=config.goal,
         )
+
+        # Truncate transcript if it exceeds context budget.
+        # Keep the start (context/intros) and the end (decisions/wrap-up),
+        # which are typically the most valuable for a summary.
+        if len(transcript) > max_transcript_chars:
+            head_chars = max_transcript_chars // 4          # 25% from start
+            tail_chars = max_transcript_chars - head_chars  # 75% from end
+            transcript = (
+                transcript[:head_chars]
+                + "\n\n[... transcript truncated for context length ...]\n\n"
+                + transcript[-tail_chars:]
+            )
+
         user_content = f"Full meeting transcript:\n\n{transcript}"
         if notes:
             user_content += f"\n\nPreparation notes:\n{notes}"

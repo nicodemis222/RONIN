@@ -50,6 +50,7 @@ class LiveCopilotViewModel: ObservableObject {
     private var wsService: WebSocketService?
     private var timer: Timer?
     private let maxDebugLines = 300
+    private var hasEnded = false  // Re-entrancy guard for endMeeting()
 
     func connect() {
         statusText = "Connecting..."
@@ -165,13 +166,28 @@ class LiveCopilotViewModel: ObservableObject {
         audioService?.setMuted(isMuted)
     }
 
+    /// End the meeting. Safe to call multiple times (re-entrancy guarded).
+    /// Always defers @Published changes to the next run-loop tick to avoid
+    /// "Publishing changes from within view updates" when called from
+    /// SwiftUI confirmation dialogs, .onChange, or .onDisappear.
     func endMeeting() {
-        addDebug("endMeeting() called")
+        guard !hasEnded else {
+            addDebug("endMeeting() called — already ended, skipping")
+            return
+        }
+        hasEnded = true
+
+        // Tear down services immediately (these are not @Published)
         audioService?.stopCapture()
         wsService?.disconnect()
         timer?.invalidate()
         timer = nil
-        isConnected = false
+
+        // Defer @Published changes to next run-loop tick
+        DispatchQueue.main.async { [weak self] in
+            self?.isConnected = false
+            self?.addDebug("endMeeting() completed")
+        }
     }
 
     func disconnect() {
@@ -184,6 +200,7 @@ class LiveCopilotViewModel: ObservableObject {
 
     /// Reset transient state for a new meeting (keeps persisted prefs)
     func resetForNewMeeting() {
+        hasEnded = false
         transcriptSegments = []
         suggestions = []
         guidance = .empty

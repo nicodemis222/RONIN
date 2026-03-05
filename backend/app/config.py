@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     llm_debounce_seconds: float = 10.0
     transcript_window_minutes: float = 1.5
     notes_max_context_chars: int = 3000
+    llm_max_transcript_chars: int = 12000  # Truncate transcript to fit LLM context
+    speaker_threshold: float = 0.08  # Cosine distance threshold for speaker change detection
 
 
 settings = Settings()

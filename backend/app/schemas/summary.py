@@ -17,3 +17,4 @@ class MeetingSummary(BaseModel):
     decisions: list[Decision] = []
     action_items: list[ActionItem] = []
     unresolved: list[str] = []
+    full_transcript: str = ""

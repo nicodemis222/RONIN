@@ -93,12 +93,16 @@ struct LiveCopilotView: View {
         .onDisappear {
             // Don't disconnect if just hiding overlay — only disconnect if meeting ends
             if appState.phase != .live {
-                viewModel.disconnect()
+                DispatchQueue.main.async {
+                    viewModel.disconnect()
+                }
             }
         }
         .onChange(of: appState.phase) { _, newPhase in
             if newPhase != .live {
-                viewModel.endMeeting()
+                DispatchQueue.main.async {
+                    viewModel.endMeeting()
+                }
             }
         }
         .alert("Error", isPresented: .init(
@@ -111,8 +115,12 @@ struct LiveCopilotView: View {
         }
         .confirmationDialog("End Meeting?", isPresented: $viewModel.showEndConfirmation) {
             Button("End Meeting", role: .destructive) {
-                viewModel.endMeeting()
-                appState.phase = .postMeeting
+                // Defer everything to next run-loop tick to avoid
+                // "Publishing changes from within view updates"
+                DispatchQueue.main.async {
+                    viewModel.endMeeting()
+                    appState.phase = .postMeeting
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
@@ -254,6 +262,13 @@ struct LiveCopilotView: View {
                                 .font(.matrixCaption2)
                                 .foregroundColor(.matrixFaded)
                                 .frame(width: 40, alignment: .leading)
+
+                            if !segment.speaker.isEmpty {
+                                Text(segment.speakerShortLabel)
+                                    .font(.matrixBadge)
+                                    .foregroundColor(segment.speakerColor)
+                                    .frame(width: 20, alignment: .leading)
+                            }
 
                             Text(segment.text)
                                 .font(.matrixCaption)

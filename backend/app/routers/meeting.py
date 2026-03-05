@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -7,6 +9,25 @@ from app.schemas.summary import MeetingSummary
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Transcript persistence directory
+TRANSCRIPT_DIR = Path.home() / "Library" / "Logs" / "Ronin" / "transcripts"
+
+
+def _save_transcript(session) -> Path | None:
+    """Persist the full transcript to disk so it's never lost."""
+    try:
+        TRANSCRIPT_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        title_slug = session.config.title.replace(" ", "-")[:40]
+        filename = f"{timestamp}_{title_slug}_{session.session_id}.txt"
+        path = TRANSCRIPT_DIR / filename
+        path.write_text(session.full_transcript, encoding="utf-8")
+        logger.info(f"Transcript saved to {path} ({len(session.transcript_segments)} segments)")
+        return path
+    except Exception as e:
+        logger.error(f"Failed to save transcript: {e}")
+        return None
 
 
 @router.post("/setup", response_model=MeetingSetupResponse)
@@ -28,27 +49,33 @@ async def end_meeting(request: Request, session_id: str):
             unresolved=[],
         )
 
+    # Always save the full transcript to disk first — before any LLM call
+    transcript_text = session.full_transcript
+    _save_transcript(session)
+
     llm = request.app.state.llm
     try:
         summary = await llm.generate_summary(
-            transcript=session.full_transcript,
+            transcript=transcript_text,
             config=session.config,
             notes=session.notes_manager.get_all_text(),
         )
+        # Attach the full (un-truncated) transcript to the response
+        summary.full_transcript = transcript_text
     except Exception as e:
         logger.error(f"Summary generation failed: {e}", exc_info=True)
-        # Return a partial summary instead of a hard 503 error
-        # so the user at least sees their transcript wasn't lost
         state.end_session(session_id)
         return MeetingSummary(
             executive_summary=(
                 f"Summary generation failed ({e}). "
-                "The meeting transcript was still captured. "
+                "The meeting transcript was still captured — "
+                "see ~/Library/Logs/Ronin/transcripts/. "
                 "Check that LM Studio is running and try again."
             ),
             decisions=[],
             action_items=[],
             unresolved=["Summary generation failed — review transcript manually"],
+            full_transcript=transcript_text,
         )
     state.end_session(session_id)
     return summary

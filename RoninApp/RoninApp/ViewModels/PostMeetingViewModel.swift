@@ -20,7 +20,9 @@ class PostMeetingViewModel: ObservableObject {
         lastSessionId = sessionId
 
         do {
-            summary = try await backendAPI.endMeeting(sessionId: sessionId)
+            let result = try await backendAPI.endMeeting(sessionId: sessionId)
+            summary = result
+            fullTranscript = result.full_transcript
         } catch {
             errorMessage = "Failed to generate summary: \(error.localizedDescription)"
         }
@@ -70,7 +72,7 @@ class PostMeetingViewModel: ObservableObject {
         }
 
         if !fullTranscript.isEmpty {
-            md += "## Full Transcript\n```\n\(fullTranscript)\n```\n"
+            md += formatTranscriptForExport()
         }
 
         let panel = NSSavePanel()
@@ -106,9 +108,64 @@ class PostMeetingViewModel: ObservableObject {
             text += summary.unresolved.map { "- \($0)" }.joined(separator: "\n")
         }
 
+        if !fullTranscript.isEmpty {
+            text += "\n\n" + formatTranscriptForExport()
+        }
+
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         showSuccess("Copied to clipboard")
+    }
+
+    // MARK: - Transcript Formatting
+
+    /// Format the full transcript with speaker breakout headers.
+    /// Input lines look like: "[07:11:54] Speaker 1: they put in Comedie..."
+    /// Output groups consecutive lines under speaker headers.
+    private func formatTranscriptForExport() -> String {
+        let lines = fullTranscript.components(separatedBy: "\n")
+
+        // Check if any line has speaker labels
+        let hasSpeakers = lines.contains { extractSpeaker(from: $0) != nil }
+
+        if !hasSpeakers {
+            // No speaker labels — plain transcript
+            return "## Full Transcript\n\n\(fullTranscript)\n"
+        }
+
+        var md = "## Full Transcript\n\n"
+        var currentSpeaker: String?
+
+        for line in lines where !line.isEmpty {
+            let speaker = extractSpeaker(from: line)
+            if let speaker, speaker != currentSpeaker {
+                currentSpeaker = speaker
+                md += "\n**\(speaker)**\n\n"
+            }
+            md += "> \(line)\n"
+        }
+
+        return md
+    }
+
+    /// Extract speaker label from a transcript line.
+    /// Format: "[HH:MM:SS] Speaker N: text..." or "[HH:MM:SS] text..."
+    private func extractSpeaker(from line: String) -> String? {
+        // Match pattern: [timestamp] Speaker Label: text
+        // After "]", look for a speaker label ending with ":"
+        guard let bracketEnd = line.firstIndex(of: "]") else { return nil }
+        let afterBracket = line[line.index(after: bracketEnd)...]
+            .trimmingCharacters(in: .whitespaces)
+
+        // Check for "Speaker N:" pattern
+        if let colonIdx = afterBracket.firstIndex(of: ":") {
+            let candidate = String(afterBracket[afterBracket.startIndex..<colonIdx])
+                .trimmingCharacters(in: .whitespaces)
+            if candidate.hasPrefix("Speaker ") {
+                return candidate
+            }
+        }
+        return nil
     }
 
     private func showSuccess(_ message: String) {

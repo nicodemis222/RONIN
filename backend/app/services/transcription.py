@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from app.config import settings
+from app.services.speaker_tracker import SpeakerTracker
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,12 @@ class TranscriptionService:
     silence_count: int = 0
     _model_loaded: bool = False
     _transcribing: bool = False
+    speaker_tracker: SpeakerTracker = field(
+        default_factory=lambda: SpeakerTracker(threshold=settings.speaker_threshold)
+    )
+    _recent_speech_audio: np.ndarray = field(
+        default_factory=lambda: np.array([], dtype=np.int16)
+    )
 
     def _ensure_model(self):
         if not self._model_loaded:
@@ -45,6 +52,14 @@ class TranscriptionService:
         if energy > SILENCE_THRESHOLD:
             self.speech_active = True
             self.silence_count = 0
+            # Accumulate speech audio for speaker identification.
+            # Keep up to 5 seconds of recent speech for feature extraction.
+            self._recent_speech_audio = np.concatenate(
+                [self._recent_speech_audio, chunk]
+            )
+            max_speech = int(5.0 * SAMPLE_RATE)
+            if len(self._recent_speech_audio) > max_speech:
+                self._recent_speech_audio = self._recent_speech_audio[-max_speech:]
         else:
             self.silence_count += 1
 
@@ -122,10 +137,21 @@ class TranscriptionService:
         if not delta.strip():
             return None
 
+        # Identify speaker from recent speech audio
+        speaker = ""
+        if len(self._recent_speech_audio) > 0:
+            speaker = self.speaker_tracker.identify(
+                self._recent_speech_audio, SAMPLE_RATE
+            )
+            # Clear speech buffer after identification so the next segment
+            # gets a fresh fingerprint
+            self._recent_speech_audio = np.array([], dtype=np.int16)
+
         return {
             "text": delta,
             "full_text": new_text,
             "timestamp": time.strftime("%H:%M:%S"),
+            "speaker": speaker,
         }
 
     def _extract_delta(self, previous: str, current: str) -> str:
@@ -142,9 +168,11 @@ class TranscriptionService:
 
     def reset_buffer(self):
         self.audio_buffer = np.array([], dtype=np.int16)
+        self._recent_speech_audio = np.array([], dtype=np.int16)
         self.previous_text = ""
         self.speech_active = False
         self.silence_count = 0
+        self.speaker_tracker.reset()
 
     def cleanup(self):
         self.reset_buffer()

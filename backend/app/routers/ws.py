@@ -59,11 +59,13 @@ async def audio_websocket(websocket: WebSocket):
                 continue
 
             if transcript_result:
-                logger.info(f"Transcript delta: '{transcript_result['text']}'")
+                speaker = transcript_result.get("speaker", "")
+                logger.info(f"Transcript delta: '{transcript_result['text']}' [{speaker}]")
                 segment = TranscriptSegment(
                     text=transcript_result["text"],
                     full_text=transcript_result["full_text"],
                     timestamp=transcript_result["timestamp"],
+                    speaker=speaker,
                 )
 
                 await websocket.send_json(
@@ -91,12 +93,18 @@ async def audio_websocket(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected after {chunks_received} chunks")
+        # Cancel any in-flight copilot LLM call to free GPU/CPU immediately
+        if copilot_task and not copilot_task.done():
+            copilot_task.cancel()
+            logger.info("Cancelled in-flight copilot task on disconnect")
         transcription.reset_buffer()
     except Exception as e:
         logger.error(
             f"WebSocket handler error after {chunks_received} chunks: {e}",
             exc_info=True,
         )
+        if copilot_task and not copilot_task.done():
+            copilot_task.cancel()
         transcription.reset_buffer()
 
 
@@ -123,6 +131,8 @@ async def _generate_and_send_copilot(websocket: WebSocket, llm, session):
             )
         except RuntimeError:
             logger.info("Copilot response ready but WebSocket already closed — skipping send")
+    except asyncio.CancelledError:
+        logger.info("Copilot task cancelled (meeting ended) — freeing GPU")
     except Exception as e:
         logger.error(f"Copilot generation failed: {e}", exc_info=True)
         try:
