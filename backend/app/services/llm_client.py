@@ -192,6 +192,7 @@ class LLMClient:
         self._detected_context: int | None = None
         self._copilot_budget: int = self.DEFAULT_COPILOT_BUDGET
         self._summary_budget: int = self.DEFAULT_SUMMARY_BUDGET
+        self._model_id: str | None = None  # Detected LLM model identifier
 
     async def detect_context_length(self) -> int:
         """Query LM Studio for the loaded model's context length.
@@ -213,6 +214,9 @@ class LLMClient:
             if resp.status_code == 200:
                 data = resp.json()
                 for model in data.get("models", []):
+                    # Skip non-LLM models (e.g. embedding models)
+                    if model.get("type") and model["type"] != "llm":
+                        continue
                     instances = model.get("loaded_instances", [])
                     if instances:
                         model_id = model.get("key", model.get("display_name", "unknown"))
@@ -259,10 +263,11 @@ class LLMClient:
             )
 
         self._detected_context = n_ctx
+        self._model_id = model_id if model_id != "unknown" else None
         self._copilot_budget, self._summary_budget = self._calibrate_budgets(n_ctx)
         logger.info(
-            f"Budget calibrated: copilot={self._copilot_budget:,} chars, "
-            f"summary={self._summary_budget:,} chars"
+            f"Using model '{model_id}' — budget calibrated: "
+            f"copilot={self._copilot_budget:,} chars, summary={self._summary_budget:,} chars"
         )
         return n_ctx
 
@@ -299,19 +304,24 @@ class LLMClient:
         which is incompatible with json_object/json_schema response formats.
         """
         try:
+            payload = {
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            # Include model ID to disambiguate when multiple models are loaded
+            # (e.g. an LLM + an embedding model). Without this, LM Studio
+            # returns 400 "Multiple models are loaded".
+            if self._model_id:
+                payload["model"] = self._model_id
             response = await self.client.post(
                 f"{self.base_url}/chat/completions",
-                json={
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                },
+                json=payload,
             )
             response.raise_for_status()
             result = response.json()
             content = result["choices"][0]["message"]["content"]
             logger.info(f"LLM response ({len(content)} chars)")
-            logger.debug(f"LLM raw: {content[:300]}...")
             return content
         except httpx.HTTPStatusError as e:
             body = ""

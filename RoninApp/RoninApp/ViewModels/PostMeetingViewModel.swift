@@ -14,6 +14,11 @@ class PostMeetingViewModel: ObservableObject {
 
     private let backendAPI = BackendAPIService()
 
+    /// Set the auth token received from BackendProcessService.
+    func setAuthToken(_ token: String) {
+        backendAPI.authToken = token
+    }
+
     func loadSummary(sessionId: String) async {
         isLoading = true
         errorMessage = nil

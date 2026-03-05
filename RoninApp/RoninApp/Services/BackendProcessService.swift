@@ -33,6 +33,10 @@ class BackendProcessService: ObservableObject {
 
     @Published var status: Status = .stopped
 
+    /// Auth token received from the backend at startup.
+    /// Used to authenticate all HTTP and WebSocket requests.
+    @Published var authToken: String = ""
+
     /// Recent backend log lines (last 200 lines, captured from stdout/stderr)
     @Published var recentLogs: [String] = []
     private let maxLogLines = 200
@@ -131,7 +135,7 @@ class BackendProcessService: ObservableObject {
         proc.standardError = pipe
         self.outputPipe = pipe
 
-        // Read stdout/stderr asynchronously and capture log lines
+        // Read stdout/stderr asynchronously and capture log lines + auth token
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             guard !data.isEmpty else { return }
@@ -139,7 +143,14 @@ class BackendProcessService: ObservableObject {
                 let lines = text.components(separatedBy: .newlines).filter { !$0.isEmpty }
                 Task { @MainActor [weak self] in
                     for line in lines {
-                        self?.appendLog(line)
+                        // Capture auth token from backend stdout
+                        if line.hasPrefix("RONIN_AUTH_TOKEN=") {
+                            let token = String(line.dropFirst("RONIN_AUTH_TOKEN=".count))
+                            self?.authToken = token
+                            self?.appendLog("[RONIN] Auth token received")
+                        } else {
+                            self?.appendLog(line)
+                        }
                     }
                 }
             }

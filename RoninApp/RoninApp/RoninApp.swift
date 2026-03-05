@@ -47,6 +47,7 @@ struct RoninApp: App {
         WindowGroup(id: "copilot-overlay") {
             LiveCopilotView()
                 .environmentObject(appState)
+                .environmentObject(backendService)
                 .environmentObject(copilotViewModel)
         }
         .windowLevel(.floating)

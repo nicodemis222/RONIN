@@ -92,7 +92,7 @@ class TranscriptionService:
             result = await self._transcribe_buffer()
         finally:
             self._transcribing = False
-        logger.info(f"Transcription result: {result}")
+        logger.info(f"Transcription result: {len(result['text'])} chars, speaker={result.get('speaker', '')}")
 
         if is_boundary:
             self.speech_active = False
@@ -126,7 +126,8 @@ class TranscriptionService:
             return None
 
         new_text = output["text"].strip()
-        logger.info(f"Whisper raw text: '{new_text}', previous: '{self.previous_text}'")
+        # Log length only — avoid logging sensitive meeting content (H6)
+        logger.info(f"Whisper transcribed {len(new_text)} chars")
 
         if new_text == self.previous_text:
             return None

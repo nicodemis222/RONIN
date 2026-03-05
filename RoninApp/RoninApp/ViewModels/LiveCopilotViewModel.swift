@@ -45,6 +45,7 @@ class LiveCopilotViewModel: ObservableObject {
     }
 
     var meetingTitle: String = ""
+    var authToken: String = ""  // Set from BackendProcessService before connect()
 
     private var audioService: AudioCaptureService?
     private var wsService: WebSocketService?
@@ -56,10 +57,10 @@ class LiveCopilotViewModel: ObservableObject {
         statusText = "Connecting..."
         addDebug("Starting connection...")
 
-        // WebSocket
+        // WebSocket — pass auth token for authentication
         let wsURL = URL(string: "ws://127.0.0.1:8000/ws/audio")!
         addDebug("WebSocket URL: \(wsURL)")
-        wsService = WebSocketService(url: wsURL)
+        wsService = WebSocketService(url: wsURL, authToken: authToken)
 
         wsService?.onConnected = { [weak self] in
             Task { @MainActor in

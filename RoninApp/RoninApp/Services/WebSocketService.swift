@@ -18,9 +18,16 @@ class WebSocketService {
     var onConnected: (() -> Void)?
     var onError: ((String) -> Void)?
 
-    init(url: URL) {
-        self.url = url
-        logger.info("WebSocketService init with URL: \(url.absoluteString)")
+    init(url: URL, authToken: String = "") {
+        // Append auth token as query parameter for WebSocket authentication
+        if !authToken.isEmpty,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            components.queryItems = [URLQueryItem(name: "token", value: authToken)]
+            self.url = components.url ?? url
+        } else {
+            self.url = url
+        }
+        logger.info("WebSocketService init")
     }
 
     func connect() {

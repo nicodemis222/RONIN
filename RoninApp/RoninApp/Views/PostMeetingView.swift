@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PostMeetingView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var backendService: BackendProcessService
     @StateObject private var viewModel = PostMeetingViewModel()
 
     var body: some View {
@@ -171,6 +172,7 @@ struct PostMeetingView: View {
         .frame(minWidth: 600, minHeight: 500)
         .onAppear {
             viewModel.meetingTitle = appState.meetingTitle
+            viewModel.setAuthToken(backendService.authToken)
             if let sessionId = appState.sessionId {
                 Task {
                     await viewModel.loadSummary(sessionId: sessionId)

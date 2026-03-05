@@ -46,7 +46,8 @@ class MeetingStateManager:
         self._active_session_id: str | None = None
 
     def create_session(self, config: MeetingSetupRequest) -> str:
-        session_id = str(uuid.uuid4())[:8]
+        # Use full UUID4 for session IDs — not truncated (H5)
+        session_id = str(uuid.uuid4())
         notes_mgr = NotesManager()
         notes_mgr.load_notes([n.model_dump() for n in config.notes])
 
@@ -70,3 +71,5 @@ class MeetingStateManager:
     def end_session(self, session_id: str):
         if self._active_session_id == session_id:
             self._active_session_id = None
+        # Remove session data from memory to prevent leaks (M6)
+        self._sessions.pop(session_id, None)

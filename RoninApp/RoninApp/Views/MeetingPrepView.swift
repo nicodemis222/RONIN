@@ -172,6 +172,12 @@ struct MeetingPrepView: View {
         .background(Color.matrixBlack)
         .matrixScanlines()
         .frame(minWidth: 500, minHeight: 500)
+        .onAppear {
+            viewModel.setAuthToken(backendService.authToken)
+        }
+        .onChange(of: backendService.authToken) { _, token in
+            viewModel.setAuthToken(token)
+        }
     }
 
     @ViewBuilder

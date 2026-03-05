@@ -3,6 +3,7 @@ import SwiftUI
 
 struct LiveCopilotView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var backendService: BackendProcessService
     @EnvironmentObject var viewModel: LiveCopilotViewModel
 
     var body: some View {
@@ -87,6 +88,7 @@ struct LiveCopilotView: View {
         }
         .onAppear {
             viewModel.meetingTitle = appState.meetingTitle
+            viewModel.authToken = backendService.authToken
             viewModel.resetForNewMeeting()
             viewModel.connect()
         }

@@ -13,6 +13,11 @@ class MeetingPrepViewModel: ObservableObject {
 
     private let backendAPI = BackendAPIService()
 
+    /// Set the auth token received from BackendProcessService.
+    func setAuthToken(_ token: String) {
+        backendAPI.authToken = token
+    }
+
     var isValid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty &&
         !goal.trimmingCharacters(in: .whitespaces).isEmpty

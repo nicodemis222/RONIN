@@ -2,6 +2,7 @@ import Foundation
 
 class BackendAPIService {
     private let baseURL: String
+    var authToken: String = ""
 
     init(baseURL: String = "http://127.0.0.1:8000") {
         self.baseURL = baseURL
@@ -15,6 +16,7 @@ class BackendAPIService {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(config)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -34,6 +36,7 @@ class BackendAPIService {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 60 // Summary generation can take a while
 
         let (data, response) = try await URLSession.shared.data(for: request)
