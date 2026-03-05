@@ -1,0 +1,417 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1F3DC596BFC025E20D99D9F7 /* WebSocketMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69211EF191432A1F7F0C52BB /* WebSocketMessage.swift */; };
+		2064FD95A02662BF4A9F1E03 /* MeetingConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66B2EDB8DE3984AD213B2C8F /* MeetingConfig.swift */; };
+		3E547DE4D05D7E05664F1C17 /* MeetingPrepViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F53840D763C572F1CE6F44E /* MeetingPrepViewModel.swift */; };
+		3E7902CD28648642F46E07DE /* BackendProcessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E03A460F6D7580C31F772 /* BackendProcessService.swift */; };
+		414C5302E875BD8FD849D987 /* TranscriptSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB82727556978B74FA8E320 /* TranscriptSegment.swift */; };
+		53212ACF6146600C8AAF19B8 /* WebSocketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A522918D7D8323982D65C2EF /* WebSocketService.swift */; };
+		53C790261AD872E1403EA7EA /* PostMeetingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8CC354836B3377DD3ABC62B /* PostMeetingView.swift */; };
+		5FF2B4B22A930438DA1A5D60 /* GuidancePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F95FCA99848C17A811251A93 /* GuidancePanelView.swift */; };
+		6297BA54A9A4F735E05BA0DE /* MeetingPrepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C9CEB52040B3388C888ED4E /* MeetingPrepView.swift */; };
+		8422030F8DE5624727844B69 /* LiveCopilotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC020DC797F02CAA1824505 /* LiveCopilotView.swift */; };
+		851DADA34A01B24AF96F5FE1 /* SuggestionsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DED54725DB0D8369981CA6ED /* SuggestionsPanelView.swift */; };
+		8B7FE96BABD85F0D4593D1EC /* PostMeetingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1F65F903CAE56480DEBB15 /* PostMeetingViewModel.swift */; };
+		932C4FC6A5986934346B26BC /* RoninApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1CA108CF705E9BE7B31C78 /* RoninApp.swift */; };
+		93AB979081DC47A22BDA8575 /* CopilotSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BDC265406018BA91A0ECAAF /* CopilotSuggestion.swift */; };
+		9FAAF54C6982A46409646B54 /* AudioCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 840D0690A21819FC72A5E594 /* AudioCaptureService.swift */; };
+		B2E95E2B479CAC739BD4E283 /* BackendAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF44401107069585A787181 /* BackendAPIService.swift */; };
+		B5324A53B8B863B2EC603FE5 /* LiveCopilotViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E8C58B0C629C70A911B9C0 /* LiveCopilotViewModel.swift */; };
+		D2AF5181464DD78CF78CB70F /* ControlBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 278D07DE8DB94831FAE81ED8 /* ControlBarView.swift */; };
+		DE4A2619ADF62B5D44562E0F /* TranscriptPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CA978C1C47D7D804FDE01F8 /* TranscriptPanelView.swift */; };
+		EFA6FF14B9EA87D684D13997 /* MeetingSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EB9B7EFD51244186FECB7A9 /* MeetingSummary.swift */; };
+		FA7B3C21D4E8A9F012B56C3A /* MatrixTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D91E4A7B2F56081AD3E7B9 /* MatrixTheme.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D4E5F6071829A1B2C3D4E5F6 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1CA978C1C47D7D804FDE01F8 /* TranscriptPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptPanelView.swift; sourceTree = "<group>"; };
+		278D07DE8DB94831FAE81ED8 /* ControlBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlBarView.swift; sourceTree = "<group>"; };
+		2B1CA108CF705E9BE7B31C78 /* RoninApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoninApp.swift; sourceTree = "<group>"; };
+		2BB82727556978B74FA8E320 /* TranscriptSegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptSegment.swift; sourceTree = "<group>"; };
+		2F53840D763C572F1CE6F44E /* MeetingPrepViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPrepViewModel.swift; sourceTree = "<group>"; };
+		3BC020DC797F02CAA1824505 /* LiveCopilotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCopilotView.swift; sourceTree = "<group>"; };
+		4B1F65F903CAE56480DEBB15 /* PostMeetingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostMeetingViewModel.swift; sourceTree = "<group>"; };
+		4BDC265406018BA91A0ECAAF /* CopilotSuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotSuggestion.swift; sourceTree = "<group>"; };
+		560A2DD3D7C9EEBBA41BBCC5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		5C49F5538513388049010B57 /* RoninApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RoninApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		66B2EDB8DE3984AD213B2C8F /* MeetingConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingConfig.swift; sourceTree = "<group>"; };
+		69211EF191432A1F7F0C52BB /* WebSocketMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketMessage.swift; sourceTree = "<group>"; };
+		6EB9B7EFD51244186FECB7A9 /* MeetingSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingSummary.swift; sourceTree = "<group>"; };
+		7BF44401107069585A787181 /* BackendAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendAPIService.swift; sourceTree = "<group>"; };
+		840D0690A21819FC72A5E594 /* AudioCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureService.swift; sourceTree = "<group>"; };
+		8B3E03A460F6D7580C31F772 /* BackendProcessService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendProcessService.swift; sourceTree = "<group>"; };
+		8C9CEB52040B3388C888ED4E /* MeetingPrepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPrepView.swift; sourceTree = "<group>"; };
+		A522918D7D8323982D65C2EF /* WebSocketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketService.swift; sourceTree = "<group>"; };
+		A7E8C58B0C629C70A911B9C0 /* LiveCopilotViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCopilotViewModel.swift; sourceTree = "<group>"; };
+		A8CC354836B3377DD3ABC62B /* PostMeetingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostMeetingView.swift; sourceTree = "<group>"; };
+		DED54725DB0D8369981CA6ED /* SuggestionsPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionsPanelView.swift; sourceTree = "<group>"; };
+		F121910AD733D95952F7DF22 /* RoninApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RoninApp.entitlements; sourceTree = "<group>"; };
+		F95FCA99848C17A811251A93 /* GuidancePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidancePanelView.swift; sourceTree = "<group>"; };
+		C3D91E4A7B2F56081AD3E7B9 /* MatrixTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixTheme.swift; sourceTree = "<group>"; };
+		D4E5F6071829A1B2C3D4E5F6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		01CC466369EEF71CCD1B85A5 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				4BDC265406018BA91A0ECAAF /* CopilotSuggestion.swift */,
+				66B2EDB8DE3984AD213B2C8F /* MeetingConfig.swift */,
+				6EB9B7EFD51244186FECB7A9 /* MeetingSummary.swift */,
+				2BB82727556978B74FA8E320 /* TranscriptSegment.swift */,
+				69211EF191432A1F7F0C52BB /* WebSocketMessage.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		07DCB7AC6E725E4D1B4739FF /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				278D07DE8DB94831FAE81ED8 /* ControlBarView.swift */,
+				F95FCA99848C17A811251A93 /* GuidancePanelView.swift */,
+				3BC020DC797F02CAA1824505 /* LiveCopilotView.swift */,
+				C3D91E4A7B2F56081AD3E7B9 /* MatrixTheme.swift */,
+				8C9CEB52040B3388C888ED4E /* MeetingPrepView.swift */,
+				A8CC354836B3377DD3ABC62B /* PostMeetingView.swift */,
+				DED54725DB0D8369981CA6ED /* SuggestionsPanelView.swift */,
+				1CA978C1C47D7D804FDE01F8 /* TranscriptPanelView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		4FC3EE7D8E760F95F39DB138 /* RoninApp */ = {
+			isa = PBXGroup;
+			children = (
+				D4E5F6071829A1B2C3D4E5F6 /* Assets.xcassets */,
+				560A2DD3D7C9EEBBA41BBCC5 /* Info.plist */,
+				F121910AD733D95952F7DF22 /* RoninApp.entitlements */,
+				2B1CA108CF705E9BE7B31C78 /* RoninApp.swift */,
+				01CC466369EEF71CCD1B85A5 /* Models */,
+				D640E1154576243ED10CF064 /* Services */,
+				9CB3A891C87FEFF08E470F06 /* ViewModels */,
+				07DCB7AC6E725E4D1B4739FF /* Views */,
+			);
+			path = RoninApp;
+			sourceTree = "<group>";
+		};
+		90B28175D644C81164F3E5F6 = {
+			isa = PBXGroup;
+			children = (
+				4FC3EE7D8E760F95F39DB138 /* RoninApp */,
+				AE9EA4ECF3BEA26EE5244065 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		9CB3A891C87FEFF08E470F06 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				A7E8C58B0C629C70A911B9C0 /* LiveCopilotViewModel.swift */,
+				2F53840D763C572F1CE6F44E /* MeetingPrepViewModel.swift */,
+				4B1F65F903CAE56480DEBB15 /* PostMeetingViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		AE9EA4ECF3BEA26EE5244065 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5C49F5538513388049010B57 /* RoninApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D640E1154576243ED10CF064 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				840D0690A21819FC72A5E594 /* AudioCaptureService.swift */,
+				7BF44401107069585A787181 /* BackendAPIService.swift */,
+				8B3E03A460F6D7580C31F772 /* BackendProcessService.swift */,
+				A522918D7D8323982D65C2EF /* WebSocketService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B3960F53FA522646319CB835 /* RoninApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C765F3BC0854213E0A2F778 /* Build configuration list for PBXNativeTarget "RoninApp" */;
+			buildPhases = (
+				432CA04B0BA6DBBC35750F78 /* Sources */,
+				E7F8A9B0C1D2E3F405162738 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RoninApp;
+			packageProductDependencies = (
+			);
+			productName = RoninApp;
+			productReference = 5C49F5538513388049010B57 /* RoninApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4B9F23B4F2C1348F6206CC48 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 420E4692E396283F3D1A24A1 /* Build configuration list for PBXProject "RoninApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 90B28175D644C81164F3E5F6;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B3960F53FA522646319CB835 /* RoninApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		432CA04B0BA6DBBC35750F78 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9FAAF54C6982A46409646B54 /* AudioCaptureService.swift in Sources */,
+				B2E95E2B479CAC739BD4E283 /* BackendAPIService.swift in Sources */,
+				3E7902CD28648642F46E07DE /* BackendProcessService.swift in Sources */,
+				D2AF5181464DD78CF78CB70F /* ControlBarView.swift in Sources */,
+				93AB979081DC47A22BDA8575 /* CopilotSuggestion.swift in Sources */,
+				5FF2B4B22A930438DA1A5D60 /* GuidancePanelView.swift in Sources */,
+				8422030F8DE5624727844B69 /* LiveCopilotView.swift in Sources */,
+				FA7B3C21D4E8A9F012B56C3A /* MatrixTheme.swift in Sources */,
+				B5324A53B8B863B2EC603FE5 /* LiveCopilotViewModel.swift in Sources */,
+				2064FD95A02662BF4A9F1E03 /* MeetingConfig.swift in Sources */,
+				6297BA54A9A4F735E05BA0DE /* MeetingPrepView.swift in Sources */,
+				3E547DE4D05D7E05664F1C17 /* MeetingPrepViewModel.swift in Sources */,
+				EFA6FF14B9EA87D684D13997 /* MeetingSummary.swift in Sources */,
+				53C790261AD872E1403EA7EA /* PostMeetingView.swift in Sources */,
+				8B7FE96BABD85F0D4593D1EC /* PostMeetingViewModel.swift in Sources */,
+				932C4FC6A5986934346B26BC /* RoninApp.swift in Sources */,
+				851DADA34A01B24AF96F5FE1 /* SuggestionsPanelView.swift in Sources */,
+				DE4A2619ADF62B5D44562E0F /* TranscriptPanelView.swift in Sources */,
+				414C5302E875BD8FD849D987 /* TranscriptSegment.swift in Sources */,
+				1F3DC596BFC025E20D99D9F7 /* WebSocketMessage.swift in Sources */,
+				53212ACF6146600C8AAF19B8 /* WebSocketService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E7F8A9B0C1D2E3F405162738 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D4E5F60718293A4B5C /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0C19C1F11BE3C46B8CE38353 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = RoninApp/RoninApp.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = RoninApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ronin.app;
+				PRODUCT_NAME = Ronin;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		19062AEE0C718728A33FA27B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 5.10;
+			};
+			name = Debug;
+		};
+		B5CBD138E7B4B6BE56943A84 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = RoninApp/RoninApp.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = RoninApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ronin.app;
+				PRODUCT_NAME = Ronin;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		BB02ED7812B5AB6244E7C9D3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 5.10;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2C765F3BC0854213E0A2F778 /* Build configuration list for PBXNativeTarget "RoninApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B5CBD138E7B4B6BE56943A84 /* Debug */,
+				0C19C1F11BE3C46B8CE38353 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		420E4692E396283F3D1A24A1 /* Build configuration list for PBXProject "RoninApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				19062AEE0C718728A33FA27B /* Debug */,
+				BB02ED7812B5AB6244E7C9D3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4B9F23B4F2C1348F6206CC48 /* Project object */;
+}
