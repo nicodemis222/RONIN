@@ -10,8 +10,13 @@ struct SuggestionsPanelView: View {
     /// Count of new batches since user scrolled away
     @State private var unreadCount = 0
 
+    /// Snapshots that have at least one suggestion
+    private var nonEmptySnapshots: [CopilotSnapshot] {
+        copilotHistory.filter { !$0.suggestions.isEmpty }
+    }
+
     private var totalSuggestions: Int {
-        copilotHistory.reduce(0) { $0 + $1.suggestions.count }
+        nonEmptySnapshots.reduce(0) { $0 + $1.suggestions.count }
     }
 
     var body: some View {
@@ -40,7 +45,7 @@ struct SuggestionsPanelView: View {
 
             Divider().overlay(Color.matrixDivider)
 
-            if copilotHistory.isEmpty {
+            if nonEmptySnapshots.isEmpty {
                 emptyState
             } else {
                 suggestionsScroll
@@ -54,7 +59,7 @@ struct SuggestionsPanelView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(copilotHistory.enumerated()), id: \.element.id) { index, snapshot in
+                    ForEach(Array(nonEmptySnapshots.enumerated()), id: \.element.id) { index, snapshot in
                         // Batch separator (between batches, not before the first)
                         if index > 0 {
                             batchSeparator(timestamp: snapshot.timestamp)
@@ -94,7 +99,7 @@ struct SuggestionsPanelView: View {
             }
             // "Jump to latest" floating button
             .overlay(alignment: .bottom) {
-                if !isAtBottom && !copilotHistory.isEmpty {
+                if !isAtBottom && !nonEmptySnapshots.isEmpty {
                     Button {
                         withAnimation(.easeOut(duration: 0.3)) {
                             proxy.scrollTo("suggestions-bottom", anchor: .bottom)

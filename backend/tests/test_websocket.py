@@ -283,7 +283,7 @@ class TestWebSocketErrorHandling:
                 # Should receive error message from copilot failure
                 msg2 = ws.receive_json()
                 assert msg2["type"] == "error"
-                assert "Copilot generation failed" in msg2["data"]["message"]
+                assert "Copilot error:" in msg2["data"]["message"] or "LLM" in msg2["data"]["message"]
         finally:
             settings.llm_debounce_seconds = original_debounce
 

@@ -299,13 +299,22 @@ class LLMClient:
                     )
                     continue
                 logger.error(f"Copilot generation failed: {e}", exc_info=True)
-                return CopilotResponse()
+                status = e.response.status_code if e.response else 0
+                if status == 429:
+                    raise RuntimeError(
+                        "LLM rate limit reached (429). Reduce debounce interval "
+                        "or check your API plan."
+                    ) from e
+                raise RuntimeError(f"LLM API error (HTTP {status})") from e
             except Exception as e:
                 logger.error(f"Copilot generation failed: {e}", exc_info=True)
-                return CopilotResponse()
+                raise RuntimeError(f"Copilot generation failed: {e}") from e
 
         logger.error("Copilot generation failed after 3 context-length retries")
-        return CopilotResponse()
+        raise RuntimeError(
+            "Copilot generation failed — model context too small. "
+            "Increase n_ctx in your LLM provider settings."
+        )
 
     async def generate_summary(
         self, transcript: str, config, notes: str

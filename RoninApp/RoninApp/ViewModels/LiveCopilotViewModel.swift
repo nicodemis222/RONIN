@@ -186,14 +186,21 @@ class LiveCopilotViewModel: ObservableObject {
             statusText = "Transcribing..."
         case .copilotResponse(let response):
             addDebug("💡 Copilot: \(response.suggestions.count) suggestions, \(response.follow_up_questions.count) questions")
+            let guidance = CopilotGuidance(
+                followUpQuestions: response.follow_up_questions,
+                risks: response.risks,
+                factsFromNotes: response.facts_from_notes
+            )
+            // Skip empty responses (e.g., from LLM rate-limit errors / 429s)
+            // to avoid polluting history with contentless snapshots
+            guard !response.suggestions.isEmpty || !guidance.isEmpty else {
+                addDebug("⚠️ Empty copilot response — skipping (LLM may be rate-limited)")
+                return
+            }
             let snapshot = CopilotSnapshot(
                 timestamp: Date(),
                 suggestions: response.suggestions,
-                guidance: CopilotGuidance(
-                    followUpQuestions: response.follow_up_questions,
-                    risks: response.risks,
-                    factsFromNotes: response.facts_from_notes
-                )
+                guidance: guidance
             )
             copilotHistory.append(snapshot)
         case .error(let msg):

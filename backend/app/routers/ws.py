@@ -191,10 +191,18 @@ async def _generate_and_send_copilot(websocket: WebSocket, llm, session):
     except asyncio.CancelledError:
         logger.info("Copilot task cancelled (meeting ended) — freeing GPU")
     except Exception as e:
+        # Surface a user-friendly error message to the client
+        error_msg = str(e)
+        if "429" in error_msg or "rate limit" in error_msg.lower():
+            user_msg = "LLM rate limit reached — suggestions paused temporarily"
+        elif "context" in error_msg.lower() or "n_ctx" in error_msg.lower():
+            user_msg = "Transcript too long for model context — increase n_ctx in LLM settings"
+        else:
+            user_msg = f"Copilot error: {error_msg}"
         logger.error(f"Copilot generation failed: {e}", exc_info=True)
         try:
             await websocket.send_json(
-                {"type": "error", "data": {"message": "Copilot generation failed — check backend logs"}}
+                {"type": "error", "data": {"message": user_msg}}
             )
         except RuntimeError:
             logger.info("Could not send error to client — WebSocket already closed")
