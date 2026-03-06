@@ -2,9 +2,11 @@
 
 A local-first meeting copilot for macOS. Real-time transcription, AI-powered suggestions, and post-meeting summaries — all running on your machine with zero cloud dependencies.
 
+![Version](https://img.shields.io/badge/version-1.0.0-00FF41)
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple&logoColor=00FF41)
 ![Swift](https://img.shields.io/badge/Swift-5.10-00FF41?logo=swift&logoColor=00FF41)
 ![Python](https://img.shields.io/badge/Python-3.14-00FF41?logo=python&logoColor=00FF41)
+![Tests](https://img.shields.io/badge/tests-128%20passing-00FF41)
 ![License](https://img.shields.io/badge/license-MIT-00FF41)
 
 ## What It Does
@@ -68,7 +70,7 @@ The Swift app captures mic audio via `AVCaptureSession` (no aggregate device —
 ### 1. Clone and set up the backend
 
 ```bash
-git clone https://github.com/yourusername/RONIN.git
+git clone https://github.com/nicodemis222/RONIN.git
 cd RONIN/backend
 
 python3 -m venv .venv
@@ -132,8 +134,8 @@ RONIN opens a resizable floating overlay window with three panels. Drag the divi
 | Panel | Content |
 |---|---|
 | **Transcript** | Real-time speech-to-text with timestamps |
-| **Responses** | 2-3 tone-varied suggested replies you can copy with one click |
-| **Guidance** | Follow-up questions, risk alerts, and relevant facts from your notes |
+| **Responses** | 2-3 tone-varied suggested replies you can copy with one click. All responses are preserved as scrollable history — newest at the bottom with auto-scroll, older responses above with timestamp separators. |
+| **Guidance** | Follow-up questions, risk alerts, and relevant facts from your notes. Full history preserved with the same auto-scroll behavior as Responses. |
 
 Controls:
 - **⌘⇧M** — Mute/unmute microphone
@@ -225,7 +227,14 @@ RONIN/
 ├── backend/                          # Python FastAPI backend
 │   ├── run.py                        # Entry point with logging setup
 │   ├── requirements.txt              # Python dependencies
-│   ├── tests/                        # pytest test suite (128 tests)
+│   ├── tests/                        # pytest test suite (128 unit tests)
+│   │   ├── test_api.py              # REST API + input validation (25 tests)
+│   │   ├── test_context_window.py   # Context window management (8 tests)
+│   │   ├── test_llm_client.py       # LLM client + normalization (20 tests)
+│   │   ├── test_meeting_state.py    # Session management (9 tests)
+│   │   ├── test_notes_manager.py    # Notes engine (18 tests)
+│   │   ├── test_transcription.py    # Whisper + hallucination filter (18 tests)
+│   │   └── test_websocket.py        # WebSocket protocol (15 tests)
 │   └── app/
 │       ├── main.py                   # FastAPI app with lifespan
 │       ├── config.py                 # Settings (ports, models, timing)
@@ -251,9 +260,37 @@ RONIN/
 │           ├── summary.py            # Meeting summary schema
 │           └── transcript.py         # Transcript segment schema
 │
+├── scripts/
+│   ├── build-dmg.sh                 # Build macOS DMG installer
+│   ├── setup.sh                     # First-time environment setup
+│   ├── start.sh                     # Start backend server
+│   └── test_pipeline.py             # Integration test pipeline
+│
 ├── CONTEXT_WINDOW_GUIDE.md           # LLM context window tuning guide
+├── TEST_PLAN.md                      # Full v1.0 test report (128 unit + 7 E2E + 12 UX tests)
 └── README.md
 ```
+
+## Testing
+
+### Run backend unit tests
+
+```bash
+cd RONIN/backend
+source .venv/bin/activate
+python -m pytest tests/ -v
+```
+
+128 tests covering: REST API, WebSocket protocol, transcription pipeline, LLM client normalization, context window management, notes engine, and session state.
+
+### Run Swift build verification
+
+```bash
+cd RONIN/RoninApp
+xcodebuild build -scheme RoninApp -configuration Debug
+```
+
+See [TEST_PLAN.md](TEST_PLAN.md) for the full v1.0 test report including end-to-end integration tests and UX acceptance test results.
 
 ## How Audio Capture Works
 
