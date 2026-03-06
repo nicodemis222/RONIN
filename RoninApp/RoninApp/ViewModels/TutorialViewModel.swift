@@ -30,8 +30,8 @@ class TutorialViewModel: ObservableObject {
             id: 0,
             icon: "terminal",
             title: "WELCOME_TO_RONIN",
-            body: "Your local-first meeting copilot. Real-time transcription, AI-powered suggestions, and post-meeting summaries — all running on your machine.",
-            detail: "No cloud. No data leaves your Mac. Ever.",
+            body: "Your local-first meeting copilot. Real-time transcription, AI-powered suggestions, and post-meeting summaries. Run fully local with LM Studio, or connect to OpenAI for faster responses.",
+            detail: "Audio never leaves your Mac. Transcription always runs on-device.",
             accentColor: .matrixNeon
         ),
         TutorialCard(
@@ -46,7 +46,7 @@ class TutorialViewModel: ObservableObject {
             id: 2,
             icon: "waveform.circle.fill",
             title: "PHASE_2: LIVE_COPILOT",
-            body: "During the meeting, a floating overlay shows live transcription, tone-varied response suggestions, follow-up questions, risk flags, and facts from your notes.",
+            body: "During the meeting, a resizable floating overlay shows live transcription, tone-varied response suggestions, follow-up questions, risk flags, and facts from your notes. Drag panel dividers to adjust layout.",
             detail: "Controls: Mute ⌘⇧M | Pause ⌘⇧P | Compact ⌘⇧C",
             accentColor: .matrixCyan
         ),
@@ -62,7 +62,7 @@ class TutorialViewModel: ObservableObject {
             id: 4,
             icon: "gear",
             title: "SYSTEM_CONFIG",
-            body: "Access Settings via ⌘, for overlay opacity, compact mode defaults, and to re-launch this tutorial anytime. Use the menu bar icon for quick meeting controls.",
+            body: "Access Settings via ⌘, to switch LLM providers, adjust overlay opacity and layout, set compact mode defaults, and re-launch this tutorial. Use the menu bar icon for quick meeting controls.",
             detail: "Run the tutorial again from Settings > General > Show Tutorial.",
             accentColor: .matrixWarning
         ),

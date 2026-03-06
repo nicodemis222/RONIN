@@ -161,3 +161,138 @@ class TestEndMeeting:
         data = resp.json()
         assert "Summary generation failed" in data["executive_summary"]
         assert len(data["unresolved"]) > 0
+
+
+# ── Notes validation at API level ────────────────────────────────────────
+
+class TestNotesValidation:
+    def test_setup_with_notes(self, client, auth_headers):
+        """POST /meeting/setup with valid notes succeeds and notes are stored."""
+        config = {
+            "title": "Design Review",
+            "goal": "Review mockups",
+            "notes": [
+                {"name": "design.md", "content": "Use rounded corners everywhere"},
+                {"name": "colors.txt", "content": "Primary: #00FF41, Background: #0D0208"},
+            ],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ready"
+        assert "session_id" in data
+
+    def test_setup_empty_notes_list(self, client, auth_headers):
+        """POST /meeting/setup with an empty notes list is perfectly valid."""
+        config = {
+            "title": "Quick Sync",
+            "goal": "Status updates",
+            "notes": [],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 200
+
+    def test_setup_no_notes_field(self, client, auth_headers):
+        """POST /meeting/setup without the notes field at all defaults to []."""
+        config = {"title": "Quick Sync", "goal": "Status updates"}
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 200
+
+    def test_setup_title_too_long(self, client, auth_headers):
+        """POST /meeting/setup rejects title exceeding 200 characters."""
+        config = {
+            "title": "A" * 201,
+            "goal": "Review",
+            "notes": [],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 422
+
+    def test_setup_goal_too_long(self, client, auth_headers):
+        """POST /meeting/setup rejects goal exceeding 1000 characters."""
+        config = {
+            "title": "Planning",
+            "goal": "G" * 1001,
+            "notes": [],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 422
+
+    def test_setup_constraints_too_long(self, client, auth_headers):
+        """POST /meeting/setup rejects constraints exceeding 2000 characters."""
+        config = {
+            "title": "Planning",
+            "goal": "Decide scope",
+            "constraints": "C" * 2001,
+            "notes": [],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 422
+
+    def test_setup_too_many_notes(self, client, auth_headers):
+        """POST /meeting/setup rejects more than 20 notes."""
+        config = {
+            "title": "Overloaded",
+            "goal": "Too much context",
+            "notes": [
+                {"name": f"note_{i}.md", "content": f"Content {i}"}
+                for i in range(21)
+            ],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 422
+
+    def test_setup_note_name_too_long(self, client, auth_headers):
+        """POST /meeting/setup rejects a note whose name exceeds 200 characters."""
+        config = {
+            "title": "Design Review",
+            "goal": "Review",
+            "notes": [
+                {"name": "x" * 201, "content": "Some content"},
+            ],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 422
+
+    def test_setup_note_missing_name(self, client, auth_headers):
+        """POST /meeting/setup rejects a note without a name field."""
+        config = {
+            "title": "Design Review",
+            "goal": "Review",
+            "notes": [{"content": "Some content"}],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 422
+
+    def test_setup_note_missing_content(self, client, auth_headers):
+        """POST /meeting/setup rejects a note without a content field."""
+        config = {
+            "title": "Design Review",
+            "goal": "Review",
+            "notes": [{"name": "readme.md"}],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 422
+
+    def test_setup_exactly_20_notes_ok(self, client, auth_headers):
+        """POST /meeting/setup accepts exactly 20 notes (the boundary)."""
+        config = {
+            "title": "Max Notes",
+            "goal": "Boundary test",
+            "notes": [
+                {"name": f"note_{i}.md", "content": f"Content for note {i}"}
+                for i in range(20)
+            ],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 200
+
+    def test_setup_title_exactly_200_chars_ok(self, client, auth_headers):
+        """POST /meeting/setup accepts a title at exactly 200 characters."""
+        config = {
+            "title": "T" * 200,
+            "goal": "Boundary test",
+            "notes": [],
+        }
+        resp = client.post("/meeting/setup", json=config, headers=auth_headers)
+        assert resp.status_code == 200

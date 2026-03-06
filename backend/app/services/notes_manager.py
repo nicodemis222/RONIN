@@ -61,11 +61,15 @@ class NotesManager:
         if not self.chunks:
             return ""
 
-        # If total notes fit in budget, return all
-        if len(self.all_text) <= (max_chars or self.MAX_CONTEXT_CHARS):
-            return self.all_text
+        budget = max_chars if max_chars is not None else self.MAX_CONTEXT_CHARS
 
-        max_chars = max_chars or self.MAX_CONTEXT_CHARS
+        # Zero budget means "no notes context"
+        if budget <= 0:
+            return ""
+
+        # If total notes fit in budget, return all
+        if len(self.all_text) <= budget:
+            return self.all_text
 
         transcript_keywords = set(
             w.lower().strip(".,!?;:\"'()[]{}") for w in recent_transcript.split() if len(w) > 3
@@ -83,7 +87,7 @@ class NotesManager:
         for score, chunk in scored:
             if score == 0 and selected:
                 break
-            if total_chars + len(chunk.text) > max_chars:
+            if total_chars + len(chunk.text) > budget:
                 continue
             selected.append(chunk)
             total_chars += len(chunk.text)
