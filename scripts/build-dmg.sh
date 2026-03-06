@@ -276,20 +276,27 @@ else
     echo "  Signing with: $SIGN_IDENTITY"
 fi
 
-# Sign inner binaries first (inside-out order is required)
-# 1. Sign the Python dylib
-codesign --force --options runtime --sign "$SIGN_IDENTITY" "$RESOURCES/python/lib/Python" 2>&1
+# Sign inner binaries first (inside-out order is required).
+#
+# Python components are signed WITHOUT --options runtime because Hardened
+# Runtime enforces library validation — with ad-hoc signing, the Python
+# binary and dylib get different identities, causing dyld to reject the
+# dylib load ("different Team IDs"). For Developer ID signing, add
+# com.apple.security.cs.disable-library-validation entitlement instead.
 
-# 2. Sign all .so native extensions
+# 1. Sign the Python dylib (no Hardened Runtime)
+codesign --force --sign "$SIGN_IDENTITY" "$RESOURCES/python/lib/Python" 2>&1
+
+# 2. Sign all .so native extensions (no Hardened Runtime)
 find "$RESOURCES/python" -name "*.so" -exec \
-    codesign --force --options runtime --sign "$SIGN_IDENTITY" {} \; 2>&1
+    codesign --force --sign "$SIGN_IDENTITY" {} \; 2>&1
 
-# 3. Sign the Python interpreter binary
-codesign --force --options runtime --sign "$SIGN_IDENTITY" \
+# 3. Sign the Python interpreter binary (no Hardened Runtime)
+codesign --force --sign "$SIGN_IDENTITY" \
     "$RESOURCES/python/bin/python$PYTHON_VERSION" 2>&1
 
-# 4. Sign the outer app bundle last
-codesign --force --deep --options runtime --sign "$SIGN_IDENTITY" "$APP_PATH" 2>&1
+# 4. Sign the outer app bundle (no --deep to preserve inner signatures)
+codesign --force --options runtime --sign "$SIGN_IDENTITY" "$APP_PATH" 2>&1
 
 echo "  Signed ($([ "$SIGN_IDENTITY" = "-" ] && echo "ad-hoc" || echo "Developer ID"))"
 

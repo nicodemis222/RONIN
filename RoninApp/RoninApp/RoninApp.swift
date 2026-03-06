@@ -55,7 +55,7 @@ struct RoninApp: App {
         }
         .windowLevel(.floating)
         .windowStyle(.plain)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
         .defaultSize(width: 900, height: 400)
 
         // Menu bar icon for discrete control

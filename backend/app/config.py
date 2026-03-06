@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     llm_max_transcript_chars: int = 12000  # Truncate transcript to fit LLM context
     speaker_threshold: float = 0.08  # Cosine distance threshold for speaker change detection
 
+    # Whisper hallucination filtering thresholds
+    # Segments with no_speech_prob above this are likely non-speech (music, noise)
+    whisper_no_speech_threshold: float = 0.6
+    # Segments with avg_logprob below this indicate low Whisper confidence
+    whisper_logprob_threshold: float = -1.0
+    # Segments with compression_ratio above this are likely repetitive hallucination
+    whisper_compression_threshold: float = 2.4
+
     # Security: auth token generated at startup, passed to Swift app via stdout
     auth_token: str = ""
 

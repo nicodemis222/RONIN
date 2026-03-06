@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -15,6 +16,11 @@ MIN_SPEECH_DURATION_SEC = 1.0
 MAX_BUFFER_DURATION_SEC = settings.max_buffer_seconds
 SILENCE_THRESHOLD = 500
 SILENCE_CHUNKS_FOR_BOUNDARY = 3
+
+# Whisper hallucination filtering thresholds
+NO_SPEECH_THRESHOLD = settings.whisper_no_speech_threshold
+LOGPROB_THRESHOLD = settings.whisper_logprob_threshold
+COMPRESSION_THRESHOLD = settings.whisper_compression_threshold
 
 
 @dataclass
@@ -130,7 +136,9 @@ class TranscriptionService:
             logger.error(f"Whisper transcription failed: {e}", exc_info=True)
             return None
 
-        new_text = output["text"].strip()
+        # Filter out non-speech segments (music, noise, hallucinations)
+        new_text = self._filter_segments(output)
+
         # Log length only — avoid logging sensitive meeting content (H6)
         logger.info(f"Whisper transcribed {len(new_text)} chars")
 
@@ -141,6 +149,11 @@ class TranscriptionService:
         self.previous_text = new_text
 
         if not delta.strip():
+            return None
+
+        # Final check: reject hallucinated repetition in the delta itself
+        if self._is_repetitive(delta):
+            logger.info("Rejected repetitive hallucination in delta")
             return None
 
         # Identify speaker from recent speech audio
@@ -159,6 +172,98 @@ class TranscriptionService:
             "timestamp": time.strftime("%H:%M:%S"),
             "speaker": speaker,
         }
+
+    def _filter_segments(self, output: dict) -> str:
+        """Filter Whisper segments using quality metrics to reject non-speech.
+
+        Whisper returns per-segment metrics:
+        - no_speech_prob: probability the segment is NOT speech (music, noise)
+        - avg_logprob: average log-probability (low = Whisper unsure)
+        - compression_ratio: text repetitiveness (high = hallucinated loops)
+
+        When music plays, Whisper hallucinates repetitive text with high
+        no_speech_prob and low confidence. This filter catches those cases.
+        """
+        segments = output.get("segments", [])
+        if not segments:
+            return output.get("text", "").strip()
+
+        kept_texts = []
+        for seg in segments:
+            no_speech = seg.get("no_speech_prob", 0.0)
+            avg_logprob = seg.get("avg_logprob", 0.0)
+            compression = seg.get("compression_ratio", 1.0)
+            text = seg.get("text", "").strip()
+
+            if not text:
+                continue
+
+            # Reject: high probability of non-speech (music, background noise)
+            if no_speech > NO_SPEECH_THRESHOLD:
+                logger.info(
+                    f"Filtered non-speech segment (no_speech_prob={no_speech:.2f}): "
+                    f"{len(text)} chars"
+                )
+                continue
+
+            # Reject: Whisper very unsure about what it heard
+            if avg_logprob < LOGPROB_THRESHOLD:
+                logger.info(
+                    f"Filtered low-confidence segment (avg_logprob={avg_logprob:.2f}): "
+                    f"{len(text)} chars"
+                )
+                continue
+
+            # Reject: highly repetitive text (hallucination on loops/music)
+            if compression > COMPRESSION_THRESHOLD:
+                logger.info(
+                    f"Filtered repetitive segment (compression={compression:.2f}): "
+                    f"{len(text)} chars"
+                )
+                continue
+
+            kept_texts.append(text)
+
+        filtered_text = " ".join(kept_texts).strip()
+        total = len(segments)
+        kept = len(kept_texts)
+        if kept < total:
+            logger.info(f"Segment filter: kept {kept}/{total} segments")
+
+        return filtered_text
+
+    @staticmethod
+    def _is_repetitive(text: str) -> bool:
+        """Detect hallucinated repetition patterns in text.
+
+        When Whisper receives music or sustained noise, it often produces
+        highly repetitive output like 'you you you you' or loops of the same
+        phrase. This catches those patterns even if per-segment metrics pass.
+        """
+        words = text.strip().split()
+        if len(words) < 4:
+            return False
+
+        # Check if a single word dominates (>60% of all words)
+        from collections import Counter
+        counts = Counter(w.lower() for w in words)
+        most_common_count = counts.most_common(1)[0][1]
+        if most_common_count / len(words) > 0.6:
+            return True
+
+        # Check for short repeating phrases (2-4 word loops)
+        text_lower = text.lower().strip()
+        for phrase_len in range(2, 5):
+            phrase_words = words[:phrase_len]
+            phrase = " ".join(w.lower() for w in phrase_words)
+            if len(phrase) < 3:
+                continue
+            # Count how many times the phrase appears
+            occurrences = len(re.findall(re.escape(phrase), text_lower))
+            if occurrences >= 3 and (occurrences * len(phrase)) / len(text_lower) > 0.5:
+                return True
+
+        return False
 
     def _extract_delta(self, previous: str, current: str) -> str:
         if not previous:

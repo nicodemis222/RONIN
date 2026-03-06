@@ -16,8 +16,11 @@ from app.config import settings
 assert "mlx_whisper" in sys.modules, "conftest.py should inject fake mlx_whisper"
 
 from app.services.transcription import (
+    COMPRESSION_THRESHOLD,
+    LOGPROB_THRESHOLD,
     MAX_BUFFER_DURATION_SEC,
     MIN_SPEECH_DURATION_SEC,
+    NO_SPEECH_THRESHOLD,
     SAMPLE_RATE,
     SILENCE_CHUNKS_FOR_BOUNDARY,
     SILENCE_THRESHOLD,
@@ -156,3 +159,149 @@ class TestResetBuffer:
         assert svc.previous_text == ""
         assert svc.speech_active is False
         assert svc.silence_count == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# _filter_segments — Whisper hallucination filtering
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestFilterSegments:
+    def test_keeps_good_speech_segments(self, svc):
+        """Segments with good metrics are kept."""
+        output = {
+            "text": "Hello how are you doing today",
+            "segments": [
+                {
+                    "text": "Hello how are you doing today",
+                    "no_speech_prob": 0.05,
+                    "avg_logprob": -0.3,
+                    "compression_ratio": 1.2,
+                }
+            ],
+        }
+        result = svc._filter_segments(output)
+        assert result == "Hello how are you doing today"
+
+    def test_filters_high_no_speech_prob(self, svc):
+        """Segments with high no_speech_prob are rejected (music/noise)."""
+        output = {
+            "text": "you you you you you",
+            "segments": [
+                {
+                    "text": "you you you you you",
+                    "no_speech_prob": 0.85,
+                    "avg_logprob": -0.5,
+                    "compression_ratio": 1.5,
+                }
+            ],
+        }
+        result = svc._filter_segments(output)
+        assert result == ""
+
+    def test_filters_low_logprob(self, svc):
+        """Segments with very low avg_logprob are rejected (Whisper unsure)."""
+        output = {
+            "text": "some uncertain text",
+            "segments": [
+                {
+                    "text": "some uncertain text",
+                    "no_speech_prob": 0.3,
+                    "avg_logprob": -1.5,
+                    "compression_ratio": 1.1,
+                }
+            ],
+        }
+        result = svc._filter_segments(output)
+        assert result == ""
+
+    def test_filters_high_compression(self, svc):
+        """Segments with high compression ratio are rejected (repetitive hallucination)."""
+        output = {
+            "text": "LO incompetent LO incompetent LO incompetent",
+            "segments": [
+                {
+                    "text": "LO incompetent LO incompetent LO incompetent",
+                    "no_speech_prob": 0.3,
+                    "avg_logprob": -0.5,
+                    "compression_ratio": 3.0,
+                }
+            ],
+        }
+        result = svc._filter_segments(output)
+        assert result == ""
+
+    def test_keeps_good_segments_filters_bad(self, svc):
+        """Mixed segments: good ones kept, bad ones filtered."""
+        output = {
+            "text": "Good speech here plus some music noise",
+            "segments": [
+                {
+                    "text": "Good speech here",
+                    "no_speech_prob": 0.05,
+                    "avg_logprob": -0.3,
+                    "compression_ratio": 1.2,
+                },
+                {
+                    "text": "plus some music noise",
+                    "no_speech_prob": 0.8,
+                    "avg_logprob": -0.9,
+                    "compression_ratio": 1.5,
+                },
+            ],
+        }
+        result = svc._filter_segments(output)
+        assert result == "Good speech here"
+
+    def test_fallback_when_no_segments(self, svc):
+        """Falls back to raw text when output has no segments key."""
+        output = {"text": "Some text without segments"}
+        result = svc._filter_segments(output)
+        assert result == "Some text without segments"
+
+    def test_threshold_boundary_values(self, svc):
+        """Segments exactly at threshold boundaries are kept (threshold is exclusive)."""
+        output = {
+            "text": "Boundary test",
+            "segments": [
+                {
+                    "text": "Boundary test",
+                    "no_speech_prob": NO_SPEECH_THRESHOLD,  # Equal, not above
+                    "avg_logprob": LOGPROB_THRESHOLD,  # Equal, not below
+                    "compression_ratio": COMPRESSION_THRESHOLD,  # Equal, not above
+                }
+            ],
+        }
+        result = svc._filter_segments(output)
+        assert result == "Boundary test"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# _is_repetitive — repetition pattern detection
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestIsRepetitive:
+    def test_single_word_repetition(self, svc):
+        """Detects single-word hallucination loops like 'you you you you you'."""
+        assert TranscriptionService._is_repetitive("you you you you you") is True
+
+    def test_phrase_repetition(self, svc):
+        """Detects multi-word hallucination loops."""
+        assert TranscriptionService._is_repetitive(
+            "thank you thank you thank you thank you"
+        ) is True
+
+    def test_normal_speech_not_flagged(self, svc):
+        """Normal speech with varied words is not flagged."""
+        assert TranscriptionService._is_repetitive(
+            "I went to the store and bought some groceries"
+        ) is False
+
+    def test_short_text_not_flagged(self, svc):
+        """Very short text (< 4 words) is never flagged."""
+        assert TranscriptionService._is_repetitive("you you you") is False
+
+    def test_lo_incompetent_pattern(self, svc):
+        """Catches the 'LO incompetent' pattern from the user's screenshot."""
+        assert TranscriptionService._is_repetitive(
+            "LO incompetent LO incompetent LO incompetent LO incompetent"
+        ) is True
