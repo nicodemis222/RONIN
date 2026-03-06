@@ -394,6 +394,12 @@ class BackendProcessService: ObservableObject {
             if await api.checkHealth() {
                 appendLog("[RONIN] Health check passed on attempt \(attempt)")
                 updateDependency(.backendProcess(.passed))
+
+                // If auth token wasn't received via pipe, try the fallback file
+                if authToken.isEmpty {
+                    readAuthTokenFromFallbackFile()
+                }
+
                 status = .running
 
                 // Fetch detailed subsystem status
@@ -406,8 +412,18 @@ class BackendProcessService: ObservableObject {
 
             // Check if process died during startup
             if let proc = process, !proc.isRunning {
-                updateDependency(.backendProcess(.failed("Exited during startup")))
-                status = .failed("Backend process exited during startup")
+                let exitCode = proc.terminationStatus
+                appendLog("[RONIN] Backend exited during startup (code \(exitCode))")
+                // Try to read logs for diagnosis
+                if let logData = FileManager.default.contents(atPath: logFilePath),
+                   let logText = String(data: logData, encoding: .utf8) {
+                    let lastLines = logText.components(separatedBy: .newlines).suffix(5)
+                    for line in lastLines where !line.isEmpty {
+                        appendLog("[BACKEND] \(line)")
+                    }
+                }
+                updateDependency(.backendProcess(.failed("Exited during startup (code \(exitCode))")))
+                status = .failed("Backend process exited during startup (code \(exitCode)). Check ~/Library/Logs/Ronin/backend.log")
                 return
             }
 
@@ -418,6 +434,23 @@ class BackendProcessService: ObservableObject {
         }
         updateDependency(.backendProcess(.failed("Health timeout")))
         status = .failed("Backend did not respond within 30 seconds")
+    }
+
+    /// Fallback: read auth token from temp file written by the backend
+    /// when the stdout pipe is broken (BrokenPipeError).
+    private func readAuthTokenFromFallbackFile() {
+        let fallbackPath = NSTemporaryDirectory() + "ronin_auth_token"
+        guard let data = FileManager.default.contents(atPath: fallbackPath),
+              let token = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !token.isEmpty else {
+            appendLog("[RONIN] ⚠️ No auth token from pipe or fallback file")
+            return
+        }
+        authToken = token
+        appendLog("[RONIN] Auth token recovered from fallback file")
+
+        // Clean up the file
+        try? FileManager.default.removeItem(atPath: fallbackPath)
     }
 
     // MARK: - Detailed Health
