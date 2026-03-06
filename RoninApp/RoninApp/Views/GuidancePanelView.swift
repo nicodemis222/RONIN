@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GuidancePanelView: View {
     let copilotHistory: [CopilotSnapshot]
+    var questionDetected: Bool = false
 
     /// Smart auto-scroll: tracks whether user is reading near the bottom
     @State private var isAtBottom = true
@@ -43,6 +44,7 @@ struct GuidancePanelView: View {
                 guidanceScroll
             }
         }
+        .questionHighlight(isActive: questionDetected)
     }
 
     // MARK: - Scrollable History with Auto-Scroll
@@ -141,6 +143,7 @@ struct GuidancePanelView: View {
                         }
                     }
                 }
+                .questionHighlight(isActive: questionDetected)
             }
 
             if !guidance.risks.isEmpty {

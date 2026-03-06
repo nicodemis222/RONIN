@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TranscriptPanelView: View {
     let segments: [TranscriptSegment]
+    var questionSegmentId: UUID?
 
     /// Smart auto-scroll: tracks whether user is reading near the bottom
     @State private var isAtBottom = true
@@ -115,7 +116,9 @@ struct TranscriptPanelView: View {
 
     /// A single transcript segment, with visual grouping by speaker turns.
     private func transcriptRow(segment: TranscriptSegment, isNewTurn: Bool, isFirst: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let isHighlighted = segment.id == questionSegmentId
+
+        return VStack(alignment: .leading, spacing: 0) {
             // Extra gap between different speaker turns (research: 12-16pt)
             if isNewTurn && !isFirst {
                 Spacer().frame(height: MatrixSpacing.speakerTurnGap)
@@ -149,8 +152,17 @@ struct TranscriptPanelView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        // Subtle left accent bar on speaker turns for visual anchoring
-        .padding(.leading, isNewTurn ? 0 : 0)
+        // Cyan left accent bar on question segments for visual linking
+        .overlay(alignment: .leading) {
+            if isHighlighted {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.matrixCyan)
+                    .frame(width: 2)
+                    .shadow(color: Color.matrixCyan.opacity(0.4), radius: 3, x: 0, y: 0)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: isHighlighted)
     }
 
     // MARK: - Empty State

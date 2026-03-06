@@ -233,4 +233,55 @@ final class ModelTests: XCTestCase {
         let segment = try JSONDecoder().decode(TranscriptSegment.self, from: json)
         XCTAssertEqual(segment.speaker, "")
     }
+
+    // MARK: - TranscriptSegment.isQuestion
+
+    func testIsQuestionWithQuestionMark() {
+        let segment = TranscriptSegment(text: "What do you think about the timeline?", timestamp: "00:01:00")
+        XCTAssertTrue(segment.isQuestion)
+    }
+
+    func testIsQuestionWithInterrogativePrefix() {
+        let prefixes = ["What ", "How ", "Why ", "Who ", "When ", "Where ", "Which ",
+                        "Could ", "Would ", "Should ", "Can ", "Is ", "Are ", "Do ",
+                        "Does ", "Did ", "Will ", "Have ", "Has ", "Shall "]
+        for prefix in prefixes {
+            let segment = TranscriptSegment(text: "\(prefix)we proceed with this", timestamp: "00:01:00")
+            XCTAssertTrue(segment.isQuestion, "Expected isQuestion=true for prefix '\(prefix)'")
+        }
+    }
+
+    func testIsQuestionCaseInsensitive() {
+        let segment = TranscriptSegment(text: "WHAT do you think about that", timestamp: "00:01:00")
+        XCTAssertTrue(segment.isQuestion)
+
+        let segment2 = TranscriptSegment(text: "how DO WE PROCEED", timestamp: "00:01:00")
+        XCTAssertTrue(segment2.isQuestion)
+    }
+
+    func testIsQuestionFalseForStatements() {
+        let segment = TranscriptSegment(text: "I think we should proceed with the plan", timestamp: "00:01:00")
+        XCTAssertFalse(segment.isQuestion)
+    }
+
+    func testIsQuestionFalseForEmptyText() {
+        let segment = TranscriptSegment(text: "", timestamp: "00:01:00")
+        XCTAssertFalse(segment.isQuestion)
+    }
+
+    func testIsQuestionFalseForWhitespace() {
+        let segment = TranscriptSegment(text: "   ", timestamp: "00:01:00")
+        XCTAssertFalse(segment.isQuestion)
+    }
+
+    func testIsQuestionTrueForQuestionMarkOnly() {
+        let segment = TranscriptSegment(text: "?", timestamp: "00:01:00")
+        XCTAssertTrue(segment.isQuestion)
+    }
+
+    func testIsQuestionFalseForInterrogativeInMiddle() {
+        // "What" is not at the start, should not be detected as question
+        let segment = TranscriptSegment(text: "I think what matters is the budget", timestamp: "00:01:00")
+        XCTAssertFalse(segment.isQuestion)
+    }
 }

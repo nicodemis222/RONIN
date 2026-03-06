@@ -213,6 +213,37 @@ struct MatrixScanlines: ViewModifier {
     }
 }
 
+/// Pulsing cyan glow highlight for panels when a question is detected.
+/// Two-layer phosphor shadow (matches MatrixGlowText pattern) + subtle background tint.
+/// Pulse oscillates border opacity 0.4–0.8 with a 1s period while active.
+struct QuestionHighlightModifier: ViewModifier {
+    let isActive: Bool
+
+    @State private var pulsePhase: Bool = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RoundedRectangle(cornerRadius: MatrixSpacing.cornerRadius)
+                    .stroke(Color.matrixCyan.opacity(isActive ? (pulsePhase ? 0.8 : 0.4) : 0), lineWidth: 1.5)
+                    .shadow(color: Color.matrixCyan.opacity(isActive ? (pulsePhase ? 0.5 : 0.25) : 0), radius: 5, x: 0, y: 0)
+                    .shadow(color: Color.matrixCyan.opacity(isActive ? (pulsePhase ? 0.2 : 0.1) : 0), radius: 10, x: 0, y: 0)
+                    .animation(isActive ? .easeInOut(duration: 1.0).repeatForever(autoreverses: true) : .easeOut(duration: 0.8), value: pulsePhase)
+            )
+            .background(
+                RoundedRectangle(cornerRadius: MatrixSpacing.cornerRadius)
+                    .fill(Color.matrixCyan.opacity(isActive ? 0.03 : 0))
+            )
+            .onChange(of: isActive) { _, newValue in
+                if newValue {
+                    pulsePhase = true
+                } else {
+                    pulsePhase = false
+                }
+            }
+    }
+}
+
 // MARK: - View Extensions
 
 extension View {
@@ -230,6 +261,11 @@ extension View {
 
     func matrixGroupBox(title: String) -> some View {
         modifier(MatrixGroupBox(title: title))
+    }
+
+    /// Apply pulsing cyan glow when a question is detected in the transcript
+    func questionHighlight(isActive: Bool) -> some View {
+        modifier(QuestionHighlightModifier(isActive: isActive))
     }
 }
 

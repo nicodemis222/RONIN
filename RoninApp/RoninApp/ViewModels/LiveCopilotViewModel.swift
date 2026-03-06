@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 import os.log
 
 private let logger = Logger(subsystem: "com.ronin.app", category: "LiveCopilot")
@@ -26,6 +27,11 @@ class LiveCopilotViewModel: ObservableObject {
     }
     @Published var transcriptSegments: [TranscriptSegment] = []
     @Published var copilotHistory: [CopilotSnapshot] = []
+
+    // Question detection highlight
+    @Published var questionDetected: Bool = false
+    @Published var lastQuestionSegmentId: UUID?
+    private var questionHighlightTimer: DispatchWorkItem?
 
     /// Latest suggestions (for compact view and badge counts)
     var suggestions: [Suggestion] { copilotHistory.last?.suggestions ?? [] }
@@ -184,6 +190,9 @@ class LiveCopilotViewModel: ObservableObject {
             addDebug("📝 Transcript: \"\(segment.text.prefix(60))\"")
             transcriptSegments.append(segment)
             statusText = "Transcribing..."
+            if segment.isQuestion {
+                triggerQuestionHighlight(segmentId: segment.id)
+            }
         case .copilotResponse(let response):
             addDebug("💡 Copilot: \(response.suggestions.count) suggestions, \(response.follow_up_questions.count) questions")
             let guidance = CopilotGuidance(
@@ -263,6 +272,10 @@ class LiveCopilotViewModel: ObservableObject {
         hasEnded = false
         transcriptSegments = []
         copilotHistory = []
+        questionDetected = false
+        lastQuestionSegmentId = nil
+        questionHighlightTimer?.cancel()
+        questionHighlightTimer = nil
         isPaused = false
         isMuted = false
         elapsedTime = 0
@@ -277,6 +290,32 @@ class LiveCopilotViewModel: ObservableObject {
         wsMessagesReceived = 0
         wsCloseCode = ""
         showEndConfirmation = false
+    }
+
+    // MARK: - Question Highlight
+
+    /// Trigger a pulsing cyan glow on copilot panels when a question is detected.
+    /// Consecutive questions cancel/restart the 4-second auto-reset timer.
+    private func triggerQuestionHighlight(segmentId: UUID) {
+        // Cancel any pending reset
+        questionHighlightTimer?.cancel()
+
+        // Activate highlight with fade-in
+        lastQuestionSegmentId = segmentId
+        withAnimation(.easeIn(duration: 0.3)) {
+            questionDetected = true
+        }
+
+        addDebug("❓ Question detected — highlighting panels")
+
+        // Schedule auto-reset after 4 seconds
+        let resetWork = DispatchWorkItem { [weak self] in
+            withAnimation(.easeOut(duration: 0.8)) {
+                self?.questionDetected = false
+            }
+        }
+        questionHighlightTimer = resetWork
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0, execute: resetWork)
     }
 
     /// Auto-dismiss error banner after 8 seconds

@@ -290,6 +290,7 @@ struct LiveCopilotView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
+                .questionHighlight(isActive: viewModel.questionDetected)
             } else {
                 HStack {
                     Spacer()
@@ -344,6 +345,7 @@ struct LiveCopilotView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
                 .background(Color.matrixSurface.opacity(0.5))
+                .questionHighlight(isActive: viewModel.questionDetected)
 
                 Divider().overlay(Color.matrixDivider)
             }
@@ -428,7 +430,7 @@ struct LiveCopilotView: View {
         let w2 = max(220, available - w1 - w3)
 
         return HStack(spacing: 0) {
-            TranscriptPanelView(segments: viewModel.transcriptSegments)
+            TranscriptPanelView(segments: viewModel.transcriptSegments, questionSegmentId: viewModel.lastQuestionSegmentId)
                 .frame(width: w1)
                 .background(Color.matrixPanel)
 
@@ -450,7 +452,7 @@ struct LiveCopilotView: View {
                         }
                 )
 
-            SuggestionsPanelView(copilotHistory: viewModel.copilotHistory, onCopy: { viewModel.copyText($0) })
+            SuggestionsPanelView(copilotHistory: viewModel.copilotHistory, questionDetected: viewModel.questionDetected, onCopy: { viewModel.copyText($0) })
                 .frame(width: w2)
                 .background(Color.matrixPanel)
 
@@ -472,7 +474,7 @@ struct LiveCopilotView: View {
                         }
                 )
 
-            GuidancePanelView(copilotHistory: viewModel.copilotHistory)
+            GuidancePanelView(copilotHistory: viewModel.copilotHistory, questionDetected: viewModel.questionDetected)
                 .frame(minWidth: 180, maxWidth: .infinity)
                 .background(Color.matrixPanel)
         }
@@ -486,7 +488,7 @@ struct LiveCopilotView: View {
         let h2 = max(100, available - h1 - h3)
 
         return VStack(spacing: 0) {
-            TranscriptPanelView(segments: viewModel.transcriptSegments)
+            TranscriptPanelView(segments: viewModel.transcriptSegments, questionSegmentId: viewModel.lastQuestionSegmentId)
                 .frame(height: h1)
                 .background(Color.matrixPanel)
 
@@ -505,7 +507,7 @@ struct LiveCopilotView: View {
                         .onEnded { _ in divider1DragStart = nil }
                 )
 
-            SuggestionsPanelView(copilotHistory: viewModel.copilotHistory, onCopy: { viewModel.copyText($0) })
+            SuggestionsPanelView(copilotHistory: viewModel.copilotHistory, questionDetected: viewModel.questionDetected, onCopy: { viewModel.copyText($0) })
                 .frame(height: h2)
                 .background(Color.matrixPanel)
 
@@ -524,7 +526,7 @@ struct LiveCopilotView: View {
                         .onEnded { _ in divider2DragStart = nil }
                 )
 
-            GuidancePanelView(copilotHistory: viewModel.copilotHistory)
+            GuidancePanelView(copilotHistory: viewModel.copilotHistory, questionDetected: viewModel.questionDetected)
                 .frame(minHeight: 80, maxHeight: .infinity)
                 .background(Color.matrixPanel)
         }

@@ -3,6 +3,7 @@ import AppKit
 
 struct SuggestionsPanelView: View {
     let copilotHistory: [CopilotSnapshot]
+    var questionDetected: Bool = false
     var onCopy: ((String) -> Void)?
 
     /// Smart auto-scroll: tracks whether user is reading near the bottom
@@ -51,6 +52,7 @@ struct SuggestionsPanelView: View {
                 suggestionsScroll
             }
         }
+        .questionHighlight(isActive: questionDetected)
     }
 
     // MARK: - Scrollable History with Auto-Scroll
