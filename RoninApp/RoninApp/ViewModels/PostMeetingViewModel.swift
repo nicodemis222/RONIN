@@ -9,8 +9,40 @@ class PostMeetingViewModel: ObservableObject {
     @Published var successMessage: String?
     @Published var fullTranscript: String = ""
 
+    // Progress tracking
+    @Published var progressPhase: SummaryPhase = .saving
+    @Published var elapsedSeconds: Int = 0
+    @Published var estimatedTotalSeconds: Int = 20  // Updated dynamically
+
+    enum SummaryPhase: String {
+        case saving = "Saving transcript..."
+        case analyzing = "Analyzing conversation..."
+        case extracting = "Extracting decisions & action items..."
+        case formatting = "Building summary..."
+
+        var icon: String {
+            switch self {
+            case .saving: return "arrow.down.doc"
+            case .analyzing: return "brain"
+            case .extracting: return "list.bullet.clipboard"
+            case .formatting: return "doc.text"
+            }
+        }
+
+        /// Estimated progress (0.0–1.0) at the start of this phase
+        var baseProgress: Double {
+            switch self {
+            case .saving: return 0.0
+            case .analyzing: return 0.15
+            case .extracting: return 0.55
+            case .formatting: return 0.80
+            }
+        }
+    }
+
     var meetingTitle: String = ""
     private var lastSessionId: String?
+    private var progressTimer: Timer?
 
     private let backendAPI = BackendAPIService()
 
@@ -23,6 +55,11 @@ class PostMeetingViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         lastSessionId = sessionId
+        elapsedSeconds = 0
+        progressPhase = .saving
+
+        // Start a timer to update elapsed time and cycle phases
+        startProgressTimer()
 
         do {
             let result = try await backendAPI.endMeeting(sessionId: sessionId)
@@ -32,6 +69,7 @@ class PostMeetingViewModel: ObservableObject {
             errorMessage = "Failed to generate summary: \(error.localizedDescription)"
         }
 
+        stopProgressTimer()
         isLoading = false
     }
 
@@ -42,6 +80,51 @@ class PostMeetingViewModel: ObservableObject {
         }
         await loadSummary(sessionId: sessionId)
     }
+
+    // MARK: - Progress Timer
+
+    private func startProgressTimer() {
+        progressTimer?.invalidate()
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.elapsedSeconds += 1
+
+                // Advance through phases based on elapsed time
+                switch self.elapsedSeconds {
+                case 0..<2:
+                    self.progressPhase = .saving
+                case 2..<8:
+                    self.progressPhase = .analyzing
+                case 8..<16:
+                    self.progressPhase = .extracting
+                default:
+                    self.progressPhase = .formatting
+                }
+            }
+        }
+    }
+
+    private func stopProgressTimer() {
+        progressTimer?.invalidate()
+        progressTimer = nil
+    }
+
+    /// Estimated progress (0.0–1.0) combining phase base + elapsed time interpolation
+    var estimatedProgress: Double {
+        let phaseBase = progressPhase.baseProgress
+        let elapsed = Double(elapsedSeconds)
+        let estimated = Double(estimatedTotalSeconds)
+
+        // Asymptotic progress: approaches 1.0 but never quite reaches it
+        // Uses a logarithmic curve so it slows down as it approaches completion
+        let rawProgress = min(elapsed / estimated, 0.95)
+
+        // Blend phase-based and time-based progress
+        return max(phaseBase, rawProgress)
+    }
+
+    // MARK: - Export
 
     func exportMarkdown() {
         guard let summary = summary else { return }

@@ -612,17 +612,20 @@ struct TabButton: View {
     }
 }
 
-// MARK: - Window Drag Enabler
+// MARK: - Window Drag & Resize Enabler
 
-/// Makes a `.plain` style window draggable by its background.
-/// Without this, windows with `.windowStyle(.plain)` have no title bar
-/// and cannot be moved by the user.
+/// Makes a `.plain` style window draggable and resizable.
+/// `.windowStyle(.plain)` strips all macOS window chrome — no title bar,
+/// no resize handles. This re-enables both by hooking into the NSWindow:
+///  - `isMovableByWindowBackground` lets the user drag anywhere to move
+///  - Adding `.resizable` to styleMask gives system resize handles on edges
 struct WindowDragEnabler: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = WindowDragNSView()
         DispatchQueue.main.async {
             if let window = view.window {
                 window.isMovableByWindowBackground = true
+                window.styleMask.insert(.resizable)
             }
         }
         return view
@@ -635,6 +638,7 @@ private class WindowDragNSView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.isMovableByWindowBackground = true
+        window?.styleMask.insert(.resizable)
     }
 }
 
