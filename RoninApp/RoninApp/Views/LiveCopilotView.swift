@@ -450,7 +450,7 @@ struct LiveCopilotView: View {
                         }
                 )
 
-            SuggestionsPanelView(suggestions: viewModel.suggestions, onCopy: { viewModel.copyText($0) })
+            SuggestionsPanelView(copilotHistory: viewModel.copilotHistory, onCopy: { viewModel.copyText($0) })
                 .frame(width: w2)
                 .background(Color.matrixPanel)
 
@@ -472,7 +472,7 @@ struct LiveCopilotView: View {
                         }
                 )
 
-            GuidancePanelView(guidance: viewModel.guidance)
+            GuidancePanelView(copilotHistory: viewModel.copilotHistory)
                 .frame(minWidth: 180, maxWidth: .infinity)
                 .background(Color.matrixPanel)
         }
@@ -505,7 +505,7 @@ struct LiveCopilotView: View {
                         .onEnded { _ in divider1DragStart = nil }
                 )
 
-            SuggestionsPanelView(suggestions: viewModel.suggestions, onCopy: { viewModel.copyText($0) })
+            SuggestionsPanelView(copilotHistory: viewModel.copilotHistory, onCopy: { viewModel.copyText($0) })
                 .frame(height: h2)
                 .background(Color.matrixPanel)
 
@@ -524,7 +524,7 @@ struct LiveCopilotView: View {
                         .onEnded { _ in divider2DragStart = nil }
                 )
 
-            GuidancePanelView(guidance: viewModel.guidance)
+            GuidancePanelView(copilotHistory: viewModel.copilotHistory)
                 .frame(minHeight: 80, maxHeight: .infinity)
                 .background(Color.matrixPanel)
         }

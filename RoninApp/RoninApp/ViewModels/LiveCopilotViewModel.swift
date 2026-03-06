@@ -25,8 +25,12 @@ class LiveCopilotViewModel: ObservableObject {
         }
     }
     @Published var transcriptSegments: [TranscriptSegment] = []
-    @Published var suggestions: [Suggestion] = []
-    @Published var guidance: CopilotGuidance = .empty
+    @Published var copilotHistory: [CopilotSnapshot] = []
+
+    /// Latest suggestions (for compact view and badge counts)
+    var suggestions: [Suggestion] { copilotHistory.last?.suggestions ?? [] }
+    /// Latest guidance (for compact view)
+    var guidance: CopilotGuidance { copilotHistory.last?.guidance ?? .empty }
     @Published var isPaused: Bool = false
     @Published var isMuted: Bool = false
     @Published var elapsedTime: TimeInterval = 0
@@ -182,12 +186,16 @@ class LiveCopilotViewModel: ObservableObject {
             statusText = "Transcribing..."
         case .copilotResponse(let response):
             addDebug("💡 Copilot: \(response.suggestions.count) suggestions, \(response.follow_up_questions.count) questions")
-            suggestions = response.suggestions
-            guidance = CopilotGuidance(
-                followUpQuestions: response.follow_up_questions,
-                risks: response.risks,
-                factsFromNotes: response.facts_from_notes
+            let snapshot = CopilotSnapshot(
+                timestamp: Date(),
+                suggestions: response.suggestions,
+                guidance: CopilotGuidance(
+                    followUpQuestions: response.follow_up_questions,
+                    risks: response.risks,
+                    factsFromNotes: response.facts_from_notes
+                )
             )
+            copilotHistory.append(snapshot)
         case .error(let msg):
             addDebug("🔴 Backend error: \(msg)")
             errorMessage = msg
@@ -247,8 +255,7 @@ class LiveCopilotViewModel: ObservableObject {
     func resetForNewMeeting() {
         hasEnded = false
         transcriptSegments = []
-        suggestions = []
-        guidance = .empty
+        copilotHistory = []
         isPaused = false
         isMuted = false
         elapsedTime = 0
