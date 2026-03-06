@@ -20,6 +20,15 @@ struct MeetingPrepView: View {
 
                     // Backend status indicator
                     backendStatusBadge
+
+                    // Settings gear button
+                    SettingsLink {
+                        Image(systemName: "gear")
+                            .font(.title2)
+                            .foregroundColor(.matrixDim)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Settings (⌘,)")
                 }
 
                 // Meeting Info
@@ -148,6 +157,7 @@ struct MeetingPrepView: View {
                         if let response = await viewModel.startMeeting() {
                             appState.sessionId = response.session_id
                             appState.meetingTitle = viewModel.title
+                            viewModel.clearPrepData()
                             appState.phase = .live
                         }
                     }
@@ -199,6 +209,15 @@ struct MeetingPrepView: View {
                 Text("Backend online")
                     .font(.matrixCaption)
                     .foregroundColor(.matrixDim)
+
+                // LLM provider indicator
+                let provider = LLMSettingsViewModel.currentProvider
+                Text("·")
+                    .foregroundColor(.matrixFaded)
+                Text(provider.shortLabel)
+                    .font(.matrixCaption)
+                    .foregroundColor(provider.isCloud ? .matrixWarning : .matrixNeon)
+                    .matrixGlow(radius: 2)
             case .failed(let msg):
                 Circle()
                     .fill(Color.matrixStatusError)

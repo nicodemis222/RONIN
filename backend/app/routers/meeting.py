@@ -67,6 +67,21 @@ async def end_meeting(request: Request, session_id: str):
     _save_transcript(session)
 
     llm = request.app.state.llm
+    if llm is None:
+        # Transcription-only mode — no LLM configured
+        state.end_session(session_id)
+        return MeetingSummary(
+            executive_summary=(
+                "No LLM provider configured. "
+                "The meeting transcript was captured successfully. "
+                "Configure an LLM provider in Settings to get AI-generated summaries."
+            ),
+            decisions=[],
+            action_items=[],
+            unresolved=[],
+            full_transcript=transcript_text,
+        )
+
     try:
         summary = await llm.generate_summary(
             transcript=transcript_text,
@@ -78,12 +93,11 @@ async def end_meeting(request: Request, session_id: str):
     except Exception as e:
         logger.error(f"Summary generation failed: {e}", exc_info=True)
         state.end_session(session_id)
-        # Return generic error message — don't expose internals (M3)
         return MeetingSummary(
             executive_summary=(
                 "Summary generation failed. "
                 "The meeting transcript was still captured. "
-                "Check that LM Studio is running and try again."
+                "Check your LLM provider configuration and try again."
             ),
             decisions=[],
             action_items=[],

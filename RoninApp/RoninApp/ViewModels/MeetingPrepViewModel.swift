@@ -4,9 +4,15 @@ import UniformTypeIdentifiers
 
 @MainActor
 class MeetingPrepViewModel: ObservableObject {
-    @Published var title: String = ""
-    @Published var goal: String = ""
-    @Published var constraints: String = ""
+    @Published var title: String = UserDefaults.standard.string(forKey: "ronin.prep.title") ?? "" {
+        didSet { UserDefaults.standard.set(title, forKey: "ronin.prep.title") }
+    }
+    @Published var goal: String = UserDefaults.standard.string(forKey: "ronin.prep.goal") ?? "" {
+        didSet { UserDefaults.standard.set(goal, forKey: "ronin.prep.goal") }
+    }
+    @Published var constraints: String = UserDefaults.standard.string(forKey: "ronin.prep.constraints") ?? "" {
+        didSet { UserDefaults.standard.set(constraints, forKey: "ronin.prep.constraints") }
+    }
     @Published var noteFiles: [NotePayload] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
@@ -61,6 +67,14 @@ class MeetingPrepViewModel: ObservableObject {
 
     func removeNote(at offsets: IndexSet) {
         noteFiles.remove(atOffsets: offsets)
+    }
+
+    /// Clear persisted prep data after a meeting starts successfully.
+    func clearPrepData() {
+        title = ""
+        goal = ""
+        constraints = ""
+        noteFiles = []
     }
 
     func startMeeting() async -> MeetingSetupResponse? {

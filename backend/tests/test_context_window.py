@@ -257,8 +257,6 @@ def test_budget_calibration():
     """Test the dynamic budget calibration logic."""
     from app.services.llm_client import LLMClient
 
-    client = LLMClient()
-
     # Simulate various detected context sizes
     # Formula: available = int(n_ctx * 0.7) * 4 chars
     #   summary = min(available, 60000), copilot = min(summary // 2, 30000)
@@ -280,7 +278,7 @@ def test_budget_calibration():
     logger.info(f"  {'─'*8}  {'─'*10}  {'─'*10}  {'─'*8}")
 
     for n_ctx, expected in test_cases:
-        copilot_budget, summary_budget = client._calibrate_budgets(n_ctx)
+        copilot_budget, summary_budget = LLMClient._calibrate_budgets(n_ctx)
 
         # 1-hour meeting is ~60K chars. Can the summary budget fit?
         fits = "✅ YES" if summary_budget >= 50000 else "⚠️  NO"
@@ -376,7 +374,8 @@ async def test_live_copilot_with_lm_studio():
     transcript = format_transcript(segments)
     logger.info(f"Generated 1-hour transcript: {len(transcript):,} chars, {len(transcript.split()):,} words")
 
-    llm = LLMClient(base_url=settings.lm_studio_url)
+    from app.services.providers.local import LocalProvider
+    llm = LLMClient(provider=LocalProvider(base_url=settings.lm_studio_url))
 
     config = MagicMock(
         title="Q3 Product Strategy Review",
@@ -443,7 +442,8 @@ async def test_detect_context_length():
         logger.warning("LM Studio not available — skipping detection test")
         return
 
-    llm = LLMClient(base_url=settings.lm_studio_url)
+    from app.services.providers.local import LocalProvider
+    llm = LLMClient(provider=LocalProvider(base_url=settings.lm_studio_url))
     detected = await llm.detect_context_length()
     logger.info(f"\n  Detected context length: {detected:,} tokens")
 

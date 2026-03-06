@@ -14,12 +14,73 @@ struct LiveCopilotView: View {
 
                 Divider().overlay(Color.matrixDivider)
 
+                // Inline error banner (replaces blocking alert)
+                if let error = viewModel.errorMessage {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.matrixStatusError)
+                        Text(error)
+                            .font(.matrixCaption)
+                            .foregroundColor(.matrixStatusError)
+                            .lineLimit(2)
+                        Spacer()
+                        Button("Retry") {
+                            viewModel.errorMessage = nil
+                            viewModel.connect()
+                        }
+                        .font(.matrixBadge)
+                        .buttonStyle(MatrixSecondaryButtonStyle())
+                        Button {
+                            viewModel.errorMessage = nil
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.matrixCaption)
+                                .foregroundColor(.matrixDim)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.matrixStatusError.opacity(0.1))
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                // Collapsible debug console
                 if viewModel.showDebugConsole {
-                    DebugConsoleView(
-                        appLogs: viewModel.debugLog,
-                        backendLogs: []
-                    )
-                    .frame(maxHeight: 200)
+                    VStack(spacing: 0) {
+                        // Clickable header bar
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                viewModel.debugConsoleExpanded.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: viewModel.debugConsoleExpanded ? "chevron.down" : "chevron.right")
+                                    .font(.matrixCaption2)
+                                    .foregroundColor(.matrixFaded)
+                                Text("Debug Console")
+                                    .font(.matrixCaption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.matrixFaded)
+                                Text("(\(viewModel.debugLog.count) lines)")
+                                    .font(.matrixCaption2)
+                                    .foregroundColor(.matrixFaded)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.matrixBar)
+                        }
+                        .buttonStyle(.plain)
+
+                        if viewModel.debugConsoleExpanded {
+                            DebugConsoleView(
+                                appLogs: viewModel.debugLog,
+                                backendLogs: []
+                            )
+                            .frame(maxHeight: 120)
+                        }
+                    }
 
                     Divider().overlay(Color.matrixDivider)
                 }
@@ -68,7 +129,9 @@ struct LiveCopilotView: View {
         }
         .frame(
             minWidth: viewModel.isCompact ? 350 : 750,
-            minHeight: viewModel.isCompact ? 200 : 300
+            maxWidth: .infinity,
+            minHeight: viewModel.isCompact ? 200 : 300,
+            maxHeight: .infinity
         )
         .opacity(viewModel.isHovering ? 1.0 : viewModel.overlayOpacity)
         .foregroundColor(.matrixText)
@@ -106,14 +169,6 @@ struct LiveCopilotView: View {
                     viewModel.endMeeting()
                 }
             }
-        }
-        .alert("Error", isPresented: .init(
-            get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil } }
-        )) {
-            Button("Dismiss") { viewModel.errorMessage = nil }
-        } message: {
-            Text(viewModel.errorMessage ?? "")
         }
         .confirmationDialog("End Meeting?", isPresented: $viewModel.showEndConfirmation) {
             Button("End Meeting", role: .destructive) {
@@ -205,7 +260,7 @@ struct LiveCopilotView: View {
                     Spacer(minLength: 4)
 
                     VStack(spacing: 4) {
-                        Text(suggestion.tone.capitalized)
+                        Text(suggestion.toneLabel)
                             .font(.matrixBadge)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -243,6 +298,46 @@ struct LiveCopilotView: View {
             }
 
             Divider().overlay(Color.matrixDivider)
+
+            // Compact guidance strip — first risk + badge counts
+            if !viewModel.guidance.isEmpty {
+                HStack(spacing: 8) {
+                    // First risk warning (most critical)
+                    if let firstRisk = viewModel.guidance.risks.first {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.matrixCaption2)
+                            .foregroundColor(.matrixWarning)
+                        Text(firstRisk.warning)
+                            .font(.matrixCaption2)
+                            .foregroundColor(.matrixWarning)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    // Badge counts
+                    if !viewModel.guidance.followUpQuestions.isEmpty {
+                        Label("\(viewModel.guidance.followUpQuestions.count)", systemImage: "questionmark.circle")
+                            .font(.matrixBadge)
+                            .foregroundColor(.matrixCyan)
+                    }
+                    if !viewModel.guidance.risks.isEmpty {
+                        Label("\(viewModel.guidance.risks.count)", systemImage: "exclamationmark.triangle")
+                            .font(.matrixBadge)
+                            .foregroundColor(.matrixWarning)
+                    }
+                    if !viewModel.guidance.factsFromNotes.isEmpty {
+                        Label("\(viewModel.guidance.factsFromNotes.count)", systemImage: "doc.text")
+                            .font(.matrixBadge)
+                            .foregroundColor(.matrixGreen)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(Color.matrixSurface.opacity(0.5))
+
+                Divider().overlay(Color.matrixDivider)
+            }
 
             // Last few transcript lines
             VStack(alignment: .leading, spacing: 2) {
@@ -285,22 +380,52 @@ struct LiveCopilotView: View {
         }
     }
 
-    // MARK: - Full Content (3-panel)
+    // MARK: - Full Content (adaptive 3-panel)
+
+    /// Determines whether panels should stack vertically based on orientation setting.
+    private func shouldUseVerticalLayout(in size: CGSize) -> Bool {
+        switch viewModel.layoutOrientation {
+        case .horizontal: return false
+        case .vertical: return true
+        case .auto: return size.height > size.width * 1.2
+        }
+    }
 
     private var fullContent: some View {
-        HStack(spacing: 0) {
-            TranscriptPanelView(segments: viewModel.transcriptSegments)
-                .frame(minWidth: 250)
+        GeometryReader { geo in
+            let vertical = shouldUseVerticalLayout(in: geo.size)
 
-            Divider().overlay(Color.matrixDivider)
+            if vertical {
+                VStack(spacing: 0) {
+                    TranscriptPanelView(segments: viewModel.transcriptSegments)
+                        .frame(minHeight: 100, maxHeight: .infinity)
 
-            SuggestionsPanelView(suggestions: viewModel.suggestions)
-                .frame(minWidth: 280)
+                    Divider().overlay(Color.matrixDivider)
 
-            Divider().overlay(Color.matrixDivider)
+                    SuggestionsPanelView(suggestions: viewModel.suggestions, onCopy: { viewModel.copyText($0) })
+                        .frame(minHeight: 100, maxHeight: .infinity)
 
-            GuidancePanelView(guidance: viewModel.guidance)
-                .frame(minWidth: 220)
+                    Divider().overlay(Color.matrixDivider)
+
+                    GuidancePanelView(guidance: viewModel.guidance)
+                        .frame(minHeight: 100, maxHeight: .infinity)
+                }
+            } else {
+                HStack(spacing: 0) {
+                    TranscriptPanelView(segments: viewModel.transcriptSegments)
+                        .frame(minWidth: 250, maxWidth: .infinity)
+
+                    Divider().overlay(Color.matrixDivider)
+
+                    SuggestionsPanelView(suggestions: viewModel.suggestions, onCopy: { viewModel.copyText($0) })
+                        .frame(minWidth: 280, maxWidth: .infinity)
+
+                    Divider().overlay(Color.matrixDivider)
+
+                    GuidancePanelView(guidance: viewModel.guidance)
+                        .frame(minWidth: 220, maxWidth: .infinity)
+                }
+            }
         }
     }
 }

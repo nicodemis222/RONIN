@@ -28,6 +28,7 @@ struct RoninApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var backendService = BackendProcessService()
     @StateObject private var copilotViewModel = LiveCopilotViewModel()
+    @StateObject private var tutorialViewModel = TutorialViewModel()
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
@@ -37,8 +38,10 @@ struct RoninApp: App {
                 .environmentObject(appState)
                 .environmentObject(backendService)
                 .environmentObject(copilotViewModel)
+                .environmentObject(tutorialViewModel)
                 .onAppear {
                     AppDelegate.backendService = backendService
+                    backendService.observeSettingsChanges()
                     backendService.start()
                 }
         }
@@ -52,7 +55,7 @@ struct RoninApp: App {
         }
         .windowLevel(.floating)
         .windowStyle(.plain)
-        .windowResizability(.contentMinSize)
+        .windowResizability(.contentSize)
         .defaultSize(width: 900, height: 400)
 
         // Menu bar icon for discrete control
@@ -67,6 +70,13 @@ struct RoninApp: App {
         // Global keyboard shortcuts
         .commands {
             RoninCommands(appState: appState, copilotViewModel: copilotViewModel)
+        }
+
+        // Settings window (Cmd+,)
+        Settings {
+            SettingsView()
+                .environmentObject(copilotViewModel)
+                .environmentObject(tutorialViewModel)
         }
     }
 
@@ -112,6 +122,24 @@ struct MenuBarMenu: View {
         .keyboardShortcut("c", modifiers: [.command, .shift])
         .disabled(!isMeetingActive)
 
+        // Layout orientation submenu
+        Menu("Layout") {
+            ForEach(LiveCopilotViewModel.LayoutOrientation.allCases) { orientation in
+                Button {
+                    vm.layoutOrientation = orientation
+                } label: {
+                    HStack {
+                        Text(orientation.label)
+                        if vm.layoutOrientation == orientation {
+                            Spacer()
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        }
+        .disabled(!isMeetingActive)
+
         Divider()
 
         // Meeting controls
@@ -143,15 +171,21 @@ struct MenuBarMenu: View {
 
         Divider()
 
-        // Opacity submenu
-        Menu("Overlay Opacity") {
-            Button("100%") { vm.overlayOpacity = 1.0 }
-            Button("90%") { vm.overlayOpacity = 0.9 }
-            Button("80%") { vm.overlayOpacity = 0.8 }
-            Button("70%") { vm.overlayOpacity = 0.7 }
-            Button("60%") { vm.overlayOpacity = 0.6 }
-            Button("50%") { vm.overlayOpacity = 0.5 }
-            Button("40%") { vm.overlayOpacity = 0.4 }
+        // Opacity submenu with current-value indicator
+        Menu("Overlay Opacity (\(Int(vm.overlayOpacity * 100))%)") {
+            ForEach([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4], id: \.self) { value in
+                Button {
+                    vm.overlayOpacity = value
+                } label: {
+                    HStack {
+                        Text("\(Int(value * 100))%")
+                        if abs(vm.overlayOpacity - value) < 0.01 {
+                            Spacer()
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
         }
 
         Divider()
@@ -194,6 +228,7 @@ struct RoninCommands: Commands {
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var copilotViewModel: LiveCopilotViewModel
+    @EnvironmentObject var tutorialVM: TutorialViewModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
@@ -201,7 +236,18 @@ struct ContentView: View {
         Group {
             switch appState.phase {
             case .prep:
-                MeetingPrepView()
+                ZStack {
+                    MeetingPrepView()
+
+                    if tutorialVM.isShowingTutorial {
+                        TutorialOverlayView()
+                            .environmentObject(tutorialVM)
+                            .transition(.opacity)
+                    }
+                }
+                .onAppear {
+                    tutorialVM.checkFirstLaunch()
+                }
             case .live:
                 // Minimal live view — overlay + menu bar are the primary interfaces
                 VStack(spacing: 20) {

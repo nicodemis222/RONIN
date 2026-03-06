@@ -30,6 +30,12 @@ class WebSocketService {
         logger.info("WebSocketService init")
     }
 
+    deinit {
+        // Safety net: cancel any live task when this service is deallocated
+        // so we never leave an orphaned connection on the backend
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+    }
+
     func connect() {
         shouldReconnect = true
         reconnectAttempts = 0

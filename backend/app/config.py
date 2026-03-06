@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     # Security: auth token generated at startup, passed to Swift app via stdout
     auth_token: str = ""
 
+    # LLM provider configuration
+    llm_provider: str = "local"  # "local", "anthropic", "openai", "none"
+    llm_model: str = ""  # Override default model for the chosen provider
+    anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+
     # WebSocket limits
     ws_max_message_bytes: int = 128_000  # ~4 seconds of 16kHz int16 audio
     ws_max_connections: int = 1  # Only one active meeting at a time

@@ -8,7 +8,15 @@ NOTES:
 {relevant_notes}
 
 RULES:
-- 2-3 suggested responses (tone: direct, diplomatic, or curious). 1-2 sentences each.
+
+SUGGESTED RESPONSES — Provide exactly 3 responses. Each MUST use a DIFFERENT tone from this list:
+  • "direct" — Assertive and action-oriented. States a clear position or next step. Example: "We should go with Option A because it saves two weeks."
+  • "diplomatic" — Tactful and collaborative. Bridges viewpoints, preserves relationships. Example: "Building on what you raised, perhaps we could combine both approaches."
+  • "analytical" — Data-driven and logical. Cites evidence, asks for metrics, reasons systematically. Example: "What metrics would confirm this is working? Let's look at the data."
+  • "empathetic" — Validates concerns and builds rapport. Acknowledges the human side. Example: "I understand the team feels stretched. What if we adjusted the timeline?"
+Pick 3 of these 4 tones. Never repeat the same tone. 1-2 sentences each.
+
+OTHER FIELDS:
 - 1-3 follow-up questions to advance the meeting goal.
 - Flag risks that conflict with constraints/goals.
 - Surface relevant facts from notes.
@@ -46,7 +54,7 @@ COPILOT_RESPONSE_SCHEMA = {
                     "properties": {
                         "tone": {
                             "type": "string",
-                            "enum": ["direct", "diplomatic", "curious"],
+                            "enum": ["direct", "diplomatic", "analytical", "empathetic"],
                         },
                         "text": {
                             "type": "string",
@@ -138,6 +146,7 @@ class PromptBuilder:
     def build_copilot_prompt(
         self, transcript_window: str, config, relevant_notes: str,
         max_transcript_chars: int = 6000,
+        suppress_thinking: bool = True,
     ) -> list[dict]:
         system = COPILOT_SYSTEM_PROMPT.format(
             meeting_title=config.title,
@@ -154,21 +163,26 @@ class PromptBuilder:
                 + transcript_window[-max_transcript_chars:]
             )
 
-        return [
+        messages = [
             {"role": "system", "content": system},
             {
                 "role": "user",
                 "content": f"Transcript:\n\n{transcript_window}\n\nJSON:",
             },
-            # Qwen 3.x thinking suppression: pre-fill assistant with
-            # closed think tags so the model skips reasoning and outputs JSON directly.
-            # This dramatically reduces output tokens and speeds up inference.
-            {"role": "assistant", "content": "<think>\n</think>\n"},
         ]
+
+        # Qwen 3.x thinking suppression: pre-fill assistant with
+        # closed think tags so the model skips reasoning and outputs JSON directly.
+        # Only used for local models — cloud providers don't need this.
+        if suppress_thinking:
+            messages.append({"role": "assistant", "content": "<think>\n</think>\n"})
+
+        return messages
 
     def build_summary_prompt(
         self, transcript: str, config, notes: str,
         max_transcript_chars: int = 12000,
+        suppress_thinking: bool = True,
     ) -> list[dict]:
         system = SUMMARY_SYSTEM_PROMPT.format(
             meeting_title=config.title,
@@ -190,9 +204,13 @@ class PromptBuilder:
         user_content = f"Full meeting transcript:\n\n{transcript}"
         if notes:
             user_content += f"\n\nPreparation notes:\n{notes}"
-        return [
+
+        messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user_content},
-            # Qwen 3.x thinking suppression — skip reasoning, output JSON directly
-            {"role": "assistant", "content": "<think>\n</think>\n"},
         ]
+
+        if suppress_thinking:
+            messages.append({"role": "assistant", "content": "<think>\n</think>\n"})
+
+        return messages

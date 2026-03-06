@@ -248,25 +248,38 @@ rm -rf "$RESOURCES/models/huggingface/hub/"*/blobs
 echo "  Whisper model copied ($(du -sh "$RESOURCES/models/" | awk '{print $1}'))"
 
 # ==============================================================================
-# Step 11: Code sign (ad-hoc)
+# Step 11: Code sign
 # ==============================================================================
 echo ""
 echo "=== Step 11: Code signing ==="
 
+# Use Developer ID if available, otherwise fall back to ad-hoc
+# Set CODESIGN_IDENTITY env var to your Developer ID, e.g.:
+#   export CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
+
+if [ "$SIGN_IDENTITY" = "-" ]; then
+    echo "  ⚠️  Using ad-hoc signing (set CODESIGN_IDENTITY for distribution)"
+else
+    echo "  Signing with: $SIGN_IDENTITY"
+fi
+
 # Sign inner binaries first (inside-out order is required)
 # 1. Sign the Python dylib
-codesign --force --sign - "$RESOURCES/python/lib/Python" 2>&1
+codesign --force --options runtime --sign "$SIGN_IDENTITY" "$RESOURCES/python/lib/Python" 2>&1
 
 # 2. Sign all .so native extensions
-find "$RESOURCES/python" -name "*.so" -exec codesign --force --sign - {} \; 2>&1
+find "$RESOURCES/python" -name "*.so" -exec \
+    codesign --force --options runtime --sign "$SIGN_IDENTITY" {} \; 2>&1
 
 # 3. Sign the Python interpreter binary
-codesign --force --sign - "$RESOURCES/python/bin/python$PYTHON_VERSION" 2>&1
+codesign --force --options runtime --sign "$SIGN_IDENTITY" \
+    "$RESOURCES/python/bin/python$PYTHON_VERSION" 2>&1
 
 # 4. Sign the outer app bundle last
-codesign --force --deep --sign - "$APP_PATH" 2>&1
+codesign --force --deep --options runtime --sign "$SIGN_IDENTITY" "$APP_PATH" 2>&1
 
-echo "  Signed (ad-hoc)"
+echo "  Signed ($([ "$SIGN_IDENTITY" = "-" ] && echo "ad-hoc" || echo "Developer ID"))"
 
 # ==============================================================================
 # Step 12: Report sizes
@@ -298,6 +311,32 @@ hdiutil create -volname "$DMG_NAME" \
     -ov -format UDZO \
     -fs HFS+ \
     "$BUILD_DIR/$DMG_NAME.dmg" 2>&1
+
+# ==============================================================================
+# Step 14: Notarize (if Developer ID signing was used)
+# ==============================================================================
+if [ "$SIGN_IDENTITY" != "-" ]; then
+    echo ""
+    echo "=== Step 14: Notarizing ==="
+
+    # Requires: APPLE_ID, APPLE_TEAM_ID, and app-specific password in keychain
+    # Set up once: xcrun notarytool store-credentials "ronin-notary" \
+    #   --apple-id "you@email.com" --team-id "TEAMID" --password "app-specific-pw"
+    NOTARY_PROFILE="${NOTARY_PROFILE:-ronin-notary}"
+
+    echo "  Submitting to Apple for notarization..."
+    xcrun notarytool submit "$BUILD_DIR/$DMG_NAME.dmg" \
+        --keychain-profile "$NOTARY_PROFILE" \
+        --wait 2>&1
+
+    echo "  Stapling notarization ticket..."
+    xcrun stapler staple "$BUILD_DIR/$DMG_NAME.dmg" 2>&1
+
+    echo "  ✅ Notarized and stapled"
+else
+    echo ""
+    echo "  ⚠️  Skipping notarization (ad-hoc signing — set CODESIGN_IDENTITY for distribution)"
+fi
 
 echo ""
 echo "============================================="

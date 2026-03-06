@@ -6,6 +6,24 @@ private let logger = Logger(subsystem: "com.ronin.app", category: "LiveCopilot")
 
 @MainActor
 class LiveCopilotViewModel: ObservableObject {
+
+    // MARK: - Layout Orientation
+
+    enum LayoutOrientation: String, CaseIterable, Identifiable {
+        case auto = "auto"
+        case horizontal = "horizontal"
+        case vertical = "vertical"
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .auto: return "Auto"
+            case .horizontal: return "Horizontal"
+            case .vertical: return "Vertical"
+            }
+        }
+    }
     @Published var transcriptSegments: [TranscriptSegment] = []
     @Published var suggestions: [Suggestion] = []
     @Published var guidance: CopilotGuidance = .empty
@@ -21,6 +39,7 @@ class LiveCopilotViewModel: ObservableObject {
     // Debug diagnostics
     @Published var debugLog: [String] = []
     @Published var showDebugConsole: Bool = false
+    @Published var debugConsoleExpanded: Bool = false
     @Published var audioChunksSent: Int = 0
     @Published var wsMessagesReceived: Int = 0
     @Published var wsCloseCode: String = ""
@@ -34,6 +53,15 @@ class LiveCopilotViewModel: ObservableObject {
         return stored > 0 ? stored : 0.95
     }() {
         didSet { UserDefaults.standard.set(overlayOpacity, forKey: "ronin.overlayOpacity") }
+    }
+    @Published var layoutOrientation: LayoutOrientation = {
+        if let raw = UserDefaults.standard.string(forKey: "ronin.layoutOrientation"),
+           let value = LayoutOrientation(rawValue: raw) {
+            return value
+        }
+        return .auto
+    }() {
+        didSet { UserDefaults.standard.set(layoutOrientation.rawValue, forKey: "ronin.layoutOrientation") }
     }
     @Published var overlayVisible: Bool = true
     @Published var showEndConfirmation: Bool = false
@@ -57,8 +85,21 @@ class LiveCopilotViewModel: ObservableObject {
         statusText = "Connecting..."
         addDebug("Starting connection...")
 
+        // Tear down any previous connection before creating a new one
+        // (prevents orphaned WebSocket connections that block the backend slot)
+        wsService?.disconnect()
+        wsService = nil
+        audioService?.stopCapture()
+        audioService = nil
+        timer?.invalidate()
+        timer = nil
+
         // WebSocket — pass auth token for authentication
-        let wsURL = URL(string: "ws://127.0.0.1:8000/ws/audio")!
+        guard let wsURL = URL(string: "ws://127.0.0.1:8000/ws/audio") else {
+            addDebug("❌ Failed to construct WebSocket URL")
+            errorMessage = "Internal error: invalid WebSocket URL"
+            return
+        }
         addDebug("WebSocket URL: \(wsURL)")
         wsService = WebSocketService(url: wsURL, authToken: authToken)
 
@@ -89,7 +130,9 @@ class LiveCopilotViewModel: ObservableObject {
         wsService?.onError = { [weak self] error in
             Task { @MainActor in
                 self?.statusText = error
+                self?.errorMessage = error
                 self?.addDebug("⚠️ WS Error: \(error)")
+                self?.scheduleErrorDismiss()
             }
         }
 
@@ -148,6 +191,7 @@ class LiveCopilotViewModel: ObservableObject {
         case .error(let msg):
             addDebug("🔴 Backend error: \(msg)")
             errorMessage = msg
+            scheduleErrorDismiss()
         }
     }
 
@@ -214,10 +258,18 @@ class LiveCopilotViewModel: ObservableObject {
         statusText = "Connecting..."
         showCopiedToast = false
         debugLog = []
+        debugConsoleExpanded = false
         audioChunksSent = 0
         wsMessagesReceived = 0
         wsCloseCode = ""
         showEndConfirmation = false
+    }
+
+    /// Auto-dismiss error banner after 8 seconds
+    private func scheduleErrorDismiss() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            self?.errorMessage = nil
+        }
     }
 
     func copyText(_ text: String) {

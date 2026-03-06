@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Python Backend Tests ──────────────────────────────────────────
+  backend-tests:
+    name: Backend Tests (Python)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pydantic-settings
+
+      - name: Run tests
+        working-directory: backend
+        run: |
+          python -m pytest tests/ -v --tb=short -m "not integration"
+
+  # ── Swift Frontend Tests ──────────────────────────────────────────
+  swift-tests:
+    name: Swift Tests (macOS)
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: RoninApp
+        run: xcodegen generate
+
+      - name: Build and test
+        working-directory: RoninApp
+        run: |
+          xcodebuild test \
+            -scheme RoninApp \
+            -destination 'platform=macOS' \
+            -only-testing:RoninAppTests \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            | xcpretty || true
+          # Check exit code from xcodebuild (xcpretty masks it)
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: RoninApp/TestResults.xcresult
+          retention-days: 7

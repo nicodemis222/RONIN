@@ -3,6 +3,7 @@ import AppKit
 
 struct SuggestionsPanelView: View {
     let suggestions: [Suggestion]
+    var onCopy: ((String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -38,7 +39,7 @@ struct SuggestionsPanelView: View {
                 ScrollView {
                     LazyVStack(spacing: 10) {
                         ForEach(suggestions) { suggestion in
-                            SuggestionCard(suggestion: suggestion)
+                            SuggestionCard(suggestion: suggestion, onCopy: onCopy)
                         }
                     }
                     .padding(12)
@@ -50,11 +51,16 @@ struct SuggestionsPanelView: View {
 
 struct SuggestionCard: View {
     let suggestion: Suggestion
+    var onCopy: ((String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(suggestion.tone.capitalized)
+            HStack(spacing: 6) {
+                Image(systemName: suggestion.toneIcon)
+                    .font(.matrixCaption)
+                    .foregroundColor(suggestion.toneColor)
+
+                Text(suggestion.toneLabel)
                     .font(.matrixBadge)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -65,8 +71,12 @@ struct SuggestionCard: View {
                 Spacer()
 
                 Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(suggestion.text, forType: .string)
+                    if let onCopy = onCopy {
+                        onCopy(suggestion.text)
+                    } else {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(suggestion.text, forType: .string)
+                    }
                 } label: {
                     Image(systemName: "doc.on.doc")
                         .font(.matrixCaption)

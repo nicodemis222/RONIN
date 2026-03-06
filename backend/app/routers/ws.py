@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import uuid
 
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -10,8 +11,8 @@ from app.schemas.transcript import TranscriptSegment
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Track active WebSocket connections to enforce the limit
-_active_ws_count = 0
+# Track active WebSocket connections by ID (robust, never drifts)
+_active_connections: set[str] = set()
 
 
 def _verify_ws_token(websocket: WebSocket) -> bool:
@@ -20,27 +21,42 @@ def _verify_ws_token(websocket: WebSocket) -> bool:
     return token == settings.auth_token
 
 
+def get_active_ws_count() -> int:
+    """Return current number of active WebSocket connections (for testing)."""
+    return len(_active_connections)
+
+
+def reset_connections() -> None:
+    """Force-clear all tracked connections (called on backend startup)."""
+    _active_connections.clear()
+    logger.info("WebSocket connection tracker reset")
+
+
 @router.websocket("/ws/audio")
 async def audio_websocket(websocket: WebSocket):
-    global _active_ws_count
+    conn_id = uuid.uuid4().hex[:8]
 
-    logger.info("WebSocket connection request received")
+    logger.info(f"WebSocket connection request received (conn={conn_id})")
 
     # ── Auth check ──────────────────────────────────────────────────
     if not _verify_ws_token(websocket):
-        logger.warning("WebSocket rejected — invalid auth token")
+        logger.warning(f"WebSocket rejected — invalid auth token (conn={conn_id})")
         await websocket.close(code=4001, reason="Unauthorized")
         return
 
     # ── Connection limit ────────────────────────────────────────────
-    if _active_ws_count >= settings.ws_max_connections:
-        logger.warning("WebSocket rejected — max connections reached")
+    if len(_active_connections) >= settings.ws_max_connections:
+        logger.warning(
+            f"WebSocket rejected — max connections reached "
+            f"({len(_active_connections)}/{settings.ws_max_connections}, "
+            f"active={_active_connections}) (conn={conn_id})"
+        )
         await websocket.close(code=4002, reason="Max connections reached")
         return
 
     await websocket.accept()
-    _active_ws_count += 1
-    logger.info(f"WebSocket accepted (active: {_active_ws_count})")
+    _active_connections.add(conn_id)
+    logger.info(f"WebSocket accepted (active: {len(_active_connections)}, conn={conn_id})")
 
     app = websocket.app
     transcription = app.state.transcription
@@ -49,12 +65,12 @@ async def audio_websocket(websocket: WebSocket):
 
     session = meeting.get_active_session()
     if not session:
-        logger.warning("No active meeting session — closing WebSocket with code 4000")
+        logger.warning(f"No active meeting session — closing WebSocket (conn={conn_id})")
         await websocket.close(code=4000, reason="No active meeting session")
-        _active_ws_count -= 1
+        _active_connections.discard(conn_id)
         return
 
-    logger.info(f"Active session found: {session.session_id}")
+    logger.info(f"Active session found: {session.session_id} (conn={conn_id})")
 
     last_llm_call = 0.0
     chunks_received = 0
@@ -117,34 +133,36 @@ async def audio_websocket(websocket: WebSocket):
                 session.append_transcript(segment)
 
                 # Only trigger a new copilot call if:
-                #  1. Debounce has elapsed
-                #  2. No copilot call is currently in-flight
-                now = asyncio.get_event_loop().time()
-                in_flight = copilot_task is not None and not copilot_task.done()
+                #  1. LLM is configured (not transcription-only mode)
+                #  2. Debounce has elapsed
+                #  3. No copilot call is currently in-flight
+                if llm is not None:
+                    now = asyncio.get_event_loop().time()
+                    in_flight = copilot_task is not None and not copilot_task.done()
 
-                if now - last_llm_call >= settings.llm_debounce_seconds and not in_flight:
-                    last_llm_call = now
-                    logger.info("Triggering copilot LLM call")
-                    copilot_task = asyncio.create_task(
-                        _generate_and_send_copilot(websocket, llm, session)
-                    )
-                elif in_flight:
-                    logger.debug("Skipping copilot — previous call still in-flight")
+                    if now - last_llm_call >= settings.llm_debounce_seconds and not in_flight:
+                        last_llm_call = now
+                        logger.info("Triggering copilot LLM call")
+                        copilot_task = asyncio.create_task(
+                            _generate_and_send_copilot(websocket, llm, session)
+                        )
+                    elif in_flight:
+                        logger.debug("Skipping copilot — previous call still in-flight")
 
     except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected after {chunks_received} chunks")
+        logger.info(f"WebSocket disconnected after {chunks_received} chunks (conn={conn_id})")
         if copilot_task and not copilot_task.done():
             copilot_task.cancel()
-            logger.info("Cancelled in-flight copilot task on disconnect")
+            logger.info(f"Cancelled in-flight copilot task on disconnect (conn={conn_id})")
         transcription.reset_buffer()
     except Exception as e:
-        logger.error(f"WebSocket handler error after {chunks_received} chunks: {e}", exc_info=True)
+        logger.error(f"WebSocket handler error after {chunks_received} chunks: {e} (conn={conn_id})", exc_info=True)
         if copilot_task and not copilot_task.done():
             copilot_task.cancel()
         transcription.reset_buffer()
     finally:
-        _active_ws_count -= 1
-        logger.info(f"WebSocket closed (active: {_active_ws_count})")
+        _active_connections.discard(conn_id)
+        logger.info(f"WebSocket closed (active: {len(_active_connections)}, conn={conn_id})")
 
 
 async def _generate_and_send_copilot(websocket: WebSocket, llm, session):

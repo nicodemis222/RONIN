@@ -44,6 +44,7 @@ class BackendProcessService: ObservableObject {
     private var process: Process?
     private var outputPipe: Pipe?
     private var healthCheckTask: Task<Void, Never>?
+    private var settingsObserver: NSObjectProtocol?
 
     /// Path to the backend's log file
     var logFilePath: String {
@@ -51,6 +52,21 @@ class BackendProcessService: ObservableObject {
     }
 
     // MARK: - Lifecycle
+
+    /// Start observing LLM settings changes.
+    /// Call once from app startup so changing provider in Settings triggers a restart.
+    func observeSettingsChanges() {
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: .roninLLMSettingsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.appendLog("[RONIN] LLM settings changed — restarting backend")
+                self?.restart()
+            }
+        }
+    }
 
     func start() {
         guard process == nil || !(process?.isRunning ?? false) else { return }
@@ -128,6 +144,25 @@ class BackendProcessService: ObservableObject {
             env["HF_HUB_CACHE"] = modelCache
         }
 
+        // LLM provider settings from UserDefaults + Keychain
+        let llmProvider = UserDefaults.standard.string(forKey: "ronin.llm.provider") ?? "local"
+        env["LLM_PROVIDER"] = llmProvider
+        appendLog("[RONIN] LLM provider: \(llmProvider)")
+
+        let llmModel = UserDefaults.standard.string(forKey: "ronin.llm.model") ?? ""
+        if !llmModel.isEmpty {
+            env["LLM_MODEL"] = llmModel
+        }
+
+        let localURL = UserDefaults.standard.string(forKey: "ronin.llm.localURL")
+            ?? "http://localhost:1234/v1"
+        env["LM_STUDIO_URL"] = localURL
+
+        // API key from Keychain (never stored in UserDefaults)
+        if let openaiKey = KeychainHelper.load(key: "ronin.openai-api-key"), !openaiKey.isEmpty {
+            env["OPENAI_API_KEY"] = openaiKey
+        }
+
         proc.environment = env
 
         let pipe = Pipe()
@@ -183,6 +218,10 @@ class BackendProcessService: ObservableObject {
         healthCheckTask?.cancel()
         healthCheckTask = nil
         outputPipe?.fileHandleForReading.readabilityHandler = nil
+        if let observer = settingsObserver {
+            NotificationCenter.default.removeObserver(observer)
+            settingsObserver = nil
+        }
 
         guard let proc = process, proc.isRunning else {
             process = nil

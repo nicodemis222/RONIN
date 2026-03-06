@@ -10,10 +10,10 @@ extension Color {
     static let matrixBright = Color(red: 0, green: 0.9, blue: 0.224)
     /// Standard readable green for body text
     static let matrixText = Color(red: 0.2, green: 0.8, blue: 0.2)
-    /// Muted green for secondary/dimmed text
-    static let matrixDim = Color(red: 0.2, green: 0.6, blue: 0.2)
-    /// Faint green for timestamps and tertiary labels
-    static let matrixFaded = Color(red: 0.176, green: 0.42, blue: 0.176)
+    /// Muted green for secondary/dimmed text (WCAG AA ≥ 4.5:1 on black)
+    static let matrixDim = Color(red: 0.22, green: 0.72, blue: 0.22)
+    /// Faint green for timestamps and tertiary labels (WCAG AA ≥ 4.5:1 on black)
+    static let matrixFaded = Color(red: 0.2, green: 0.56, blue: 0.2)
 
     // Backgrounds
     /// True black
@@ -34,14 +34,16 @@ extension Color {
     static let matrixStatusPaused = Color(red: 0.8, green: 0.667, blue: 0)
     static let matrixStatusError = Color(red: 0.8, green: 0.133, blue: 0.133)
 
-    // Semantic greens for tone differentiation
-    /// Direct tone / follow-up questions: cyan-green
+    // Semantic colors for tone differentiation
+    /// Direct tone: cyan-green — assertive, action-oriented
     static let matrixCyan = Color(red: 0, green: 1.0, blue: 0.6)
-    /// Diplomatic tone / notes: standard neon
+    /// Diplomatic tone: standard neon — collaborative, bridging
     static let matrixGreen = Color(red: 0, green: 1.0, blue: 0.255)
-    /// Curious tone: yellow-green
+    /// Analytical tone: yellow-green — data-driven, logical
     static let matrixLime = Color(red: 0.667, green: 1.0, blue: 0)
-    /// Warnings with amber warmth
+    /// Empathetic tone: warm amber — validates concerns, builds rapport
+    static let matrixAmber = Color(red: 1.0, green: 0.76, blue: 0.28)
+    /// Warnings
     static let matrixWarning = Color(red: 0.867, green: 0.667, blue: 0)
 
     // Glow
@@ -202,6 +204,23 @@ struct MatrixDestructiveButtonStyle: ButtonStyle {
                     .stroke(Color.matrixStatusError.opacity(0.4), lineWidth: 1)
             )
     }
+}
+
+// MARK: - Spacing Constants
+
+enum MatrixSpacing {
+    /// Horizontal padding for panel content (12pt)
+    static let panelPaddingH: CGFloat = 12
+    /// Horizontal padding for bars and headers (16pt)
+    static let barPaddingH: CGFloat = 16
+    /// Vertical padding for bars and headers (8pt)
+    static let barPaddingV: CGFloat = 8
+    /// Card internal padding (10pt)
+    static let cardPadding: CGFloat = 10
+    /// Outer padding for settings/overlay pages (24pt)
+    static let outerPadding: CGFloat = 24
+    /// Standard corner radius (6pt)
+    static let cornerRadius: CGFloat = 6
 }
 
 // MARK: - Matrix TextField Style

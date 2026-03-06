@@ -2,7 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Ronin needs microphone access to transcribe your meeting in real-time.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Ronin connects to a local AI backend on your Mac for real-time transcription and meeting analysis. No data leaves your machine.</string>
 </dict>
 </plist>
