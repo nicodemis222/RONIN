@@ -88,6 +88,13 @@ def client(mock_llm):
         # Use a lightweight mock TranscriptionService — no Whisper
         mock_transcription = MagicMock()
         mock_transcription.cleanup = MagicMock()
+        mock_transcription._model_loaded = False
+        mock_transcription.model_name = "test-model"
+
+        # Set LLM mock attributes used by /health?details=true
+        mock_llm._detected_context = 8192
+        mock_llm.provider = MagicMock()
+        mock_llm.provider.name = "test"
 
         application.state.transcription = mock_transcription
         application.state.llm = mock_llm

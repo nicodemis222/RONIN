@@ -92,6 +92,11 @@ class TranscriptionService:
             result = await self._transcribe_buffer()
         finally:
             self._transcribing = False
+
+        if result is None:
+            logger.info("Transcription returned no result (model error or no new text)")
+            return None
+
         logger.info(f"Transcription result: {len(result['text'])} chars, speaker={result.get('speaker', '')}")
 
         if is_boundary:

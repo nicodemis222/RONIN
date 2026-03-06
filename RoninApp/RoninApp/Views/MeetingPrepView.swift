@@ -18,8 +18,10 @@ struct MeetingPrepView: View {
 
                     Spacer()
 
-                    // Backend status indicator
-                    backendStatusBadge
+                    // Compact backend status (shown when all checks pass)
+                    if backendService.status.isRunning && backendService.allDependenciesPassed {
+                        backendStatusBadge
+                    }
 
                     // Settings gear button
                     SettingsLink {
@@ -29,6 +31,15 @@ struct MeetingPrepView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Settings (⌘,)")
+                }
+
+                // Dependency checklist (shown during startup or when checks are incomplete/failed)
+                if !backendService.status.isRunning || !backendService.allDependenciesPassed {
+                    DependencyChecklistView(
+                        dependencies: backendService.dependencies,
+                        onRetry: { backendService.restart() }
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 // Meeting Info

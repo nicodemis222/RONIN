@@ -1,6 +1,6 @@
 """Tests for the REST API endpoints in app/routers/meeting.py."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -13,6 +13,57 @@ class TestHealth:
         resp = client.get("/meeting/health")
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
+
+    def test_health_detailed_returns_dependencies(self, client):
+        """GET /meeting/health?details=true returns dependency info."""
+        resp = client.get("/meeting/health", params={"details": "true"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "status" in data
+        assert "dependencies" in data
+        deps = data["dependencies"]
+        assert "whisper" in deps
+        assert "llm" in deps
+        assert "meeting" in deps
+        # Whisper should have model name and status
+        assert "model" in deps["whisper"]
+        assert deps["whisper"]["status"] in ("loaded", "available")
+        # Meeting should show active state
+        assert "active" in deps["meeting"]
+
+
+# ── Graceful Shutdown ─────────────────────────────────────────────────────
+
+class TestGracefulShutdown:
+    def test_shutdown_no_active_session(self, client, auth_headers):
+        """POST /meeting/shutdown with no active session returns cleanly."""
+        resp = client.post("/meeting/shutdown", headers=auth_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "shutting_down"
+        assert data["transcript_saved"] is False
+        assert data["segments_saved"] == 0
+
+    def test_shutdown_saves_active_transcript(
+        self, client, auth_headers, meeting_config
+    ):
+        """POST /meeting/shutdown saves transcript from active session."""
+        # Set up a meeting
+        setup_resp = client.post(
+            "/meeting/setup", json=meeting_config, headers=auth_headers
+        )
+        assert setup_resp.status_code == 200
+
+        with patch("app.routers.meeting._save_transcript", return_value="/tmp/test.md"):
+            resp = client.post("/meeting/shutdown", headers=auth_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "shutting_down"
+
+    def test_shutdown_unauthorized(self, client):
+        """POST /meeting/shutdown without auth returns 401."""
+        resp = client.post("/meeting/shutdown")
+        assert resp.status_code == 401
 
 
 # ── Setup meeting ─────────────────────────────────────────────────────────

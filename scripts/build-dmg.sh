@@ -38,15 +38,21 @@ if [ ! -d "$BACKEND_DIR/.venv" ]; then
     exit 1
 fi
 
+SKIP_WHISPER=false
 if [ ! -d "$WHISPER_MODEL_CACHE" ]; then
-    echo "ERROR: Whisper model not found at $WHISPER_MODEL_CACHE"
-    echo "Run the backend once to download the model, or run scripts/setup.sh"
-    exit 1
+    echo "  ⚠️  Whisper model not found at $WHISPER_MODEL_CACHE"
+    echo "     The DMG will download the model on first run."
+    echo "     To bundle offline: disconnect VPN, run 'scripts/setup.sh', rebuild."
+    SKIP_WHISPER=true
 fi
 
 echo "  Python framework: OK"
 echo "  Backend venv: OK"
-echo "  Whisper model: OK"
+if [ "$SKIP_WHISPER" = true ]; then
+    echo "  Whisper model: SKIP (will download on first run)"
+else
+    echo "  Whisper model: OK"
+fi
 
 # ==============================================================================
 # Step 1: Clean
@@ -226,26 +232,32 @@ echo "  Backend code copied"
 echo ""
 echo "=== Step 10: Copying Whisper model ==="
 
-# Copy the HF cache structure, resolving symlinks to real files
-cp -R "$WHISPER_MODEL_CACHE" "$RESOURCES/models/huggingface/hub/"
+if [ "$SKIP_WHISPER" = true ]; then
+    echo "  Skipped — model will be downloaded on first run"
+    # Remove the empty models directory so bundled mode detection doesn't trigger
+    rm -rf "$RESOURCES/models"
+else
+    # Copy the HF cache structure, resolving symlinks to real files
+    cp -R "$WHISPER_MODEL_CACHE" "$RESOURCES/models/huggingface/hub/"
 
-# Resolve symlinks to real files (HF cache uses symlinks from snapshots → blobs)
-find "$RESOURCES/models" -type l | while IFS= read -r link; do
-    target=$(readlink "$link")
-    # Resolve relative symlinks
-    if [[ "$target" != /* ]]; then
-        target="$(cd "$(dirname "$link")" && cd "$(dirname "$target")" && pwd)/$(basename "$target")"
-    fi
-    if [ -f "$target" ]; then
-        rm "$link"
-        cp "$target" "$link"
-    fi
-done
+    # Resolve symlinks to real files (HF cache uses symlinks from snapshots → blobs)
+    find "$RESOURCES/models" -type l | while IFS= read -r link; do
+        target=$(readlink "$link")
+        # Resolve relative symlinks
+        if [[ "$target" != /* ]]; then
+            target="$(cd "$(dirname "$link")" && cd "$(dirname "$target")" && pwd)/$(basename "$target")"
+        fi
+        if [ -f "$target" ]; then
+            rm "$link"
+            cp "$target" "$link"
+        fi
+    done
 
-# Remove the blobs directory (snapshots now have real files, blobs are duplicates)
-rm -rf "$RESOURCES/models/huggingface/hub/"*/blobs
+    # Remove the blobs directory (snapshots now have real files, blobs are duplicates)
+    rm -rf "$RESOURCES/models/huggingface/hub/"*/blobs
 
-echo "  Whisper model copied ($(du -sh "$RESOURCES/models/" | awk '{print $1}'))"
+    echo "  Whisper model copied ($(du -sh "$RESOURCES/models/" | awk '{print $1}'))"
+fi
 
 # ==============================================================================
 # Step 11: Code sign

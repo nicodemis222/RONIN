@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 
+from app.config import settings
 from app.schemas.meeting import MeetingSetupRequest, MeetingSetupResponse
 from app.schemas.summary import MeetingSummary
 
@@ -109,5 +110,86 @@ async def end_meeting(request: Request, session_id: str):
 
 
 @router.get("/health")
-async def health():
-    return {"status": "ok"}
+async def health(request: Request, details: bool = False):
+    if not details:
+        return {"status": "ok"}
+
+    # ── Detailed dependency report ───────────────────────────────────
+    deps: dict = {}
+
+    # Whisper model
+    transcription = request.app.state.transcription
+    deps["whisper"] = {
+        "status": "loaded" if transcription._model_loaded else "available",
+        "model": transcription.model_name,
+    }
+
+    # LLM provider
+    llm = request.app.state.llm
+    if llm is None:
+        deps["llm"] = {
+            "status": "none",
+            "provider": settings.llm_provider,
+            "detail": "Transcription-only mode",
+        }
+    else:
+        if llm._detected_context:
+            deps["llm"] = {
+                "status": "ok",
+                "provider": llm.provider.name,
+                "context_length": llm._detected_context,
+            }
+        else:
+            try:
+                n_ctx = await llm.detect_context_length()
+                deps["llm"] = {
+                    "status": "ok",
+                    "provider": llm.provider.name,
+                    "context_length": n_ctx,
+                }
+            except Exception as e:
+                deps["llm"] = {
+                    "status": "error",
+                    "provider": llm.provider.name,
+                    "detail": str(e)[:200],
+                }
+
+    # Active meeting
+    meeting = request.app.state.meeting
+    active = meeting.get_active_session()
+    deps["meeting"] = {
+        "active": active is not None,
+        "segments": len(active.transcript_segments) if active else 0,
+    }
+
+    overall = "ok" if all(
+        d.get("status") in ("ok", "available", "loaded", "none")
+        for d in deps.values()
+        if "status" in d
+    ) else "degraded"
+
+    return {"status": overall, "dependencies": deps}
+
+
+@router.post("/shutdown")
+async def graceful_shutdown(request: Request):
+    """Save any active meeting transcript and prepare for clean exit."""
+    meeting = request.app.state.meeting
+    active = meeting.get_active_session()
+    transcript_saved = False
+    segments = 0
+
+    if active and active.transcript_segments:
+        segments = len(active.transcript_segments)
+        path = _save_transcript(active)
+        transcript_saved = path is not None
+        meeting.end_session(active.session_id)
+        logger.info(f"Graceful shutdown: saved {segments} transcript segments")
+    else:
+        logger.info("Graceful shutdown: no active session to save")
+
+    return {
+        "status": "shutting_down",
+        "transcript_saved": transcript_saved,
+        "segments_saved": segments,
+    }

@@ -58,6 +58,50 @@ class BackendAPIService {
         }
     }
 
+    // MARK: - Detailed Health Check
+
+    struct HealthDetails: Decodable {
+        let status: String
+        let dependencies: [String: DependencyInfo]
+
+        struct DependencyInfo: Decodable {
+            let status: String
+            let provider: String?
+            let detail: String?
+            let model: String?
+            let context_length: Int?
+            let active: Bool?
+            let segments: Int?
+        }
+    }
+
+    func checkHealthDetailed() async -> HealthDetails? {
+        guard let url = URL(string: "\(baseURL)/meeting/health?details=true") else { return nil }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            return try JSONDecoder().decode(HealthDetails.self, from: data)
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: - Graceful Shutdown
+
+    func requestGracefulShutdown() async -> Bool {
+        guard let url = URL(string: "\(baseURL)/meeting/shutdown") else { return false }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 3
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            return (response as? HTTPURLResponse)?.statusCode == 200
+        } catch {
+            return false
+        }
+    }
+
     // Parse FastAPI error responses: {"detail": "..."}
     private func parseError(data: Data, fallback: String) -> APIError {
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

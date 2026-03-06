@@ -69,6 +69,18 @@ async def lifespan(app: FastAPI):
     logger.info("Auth token and provider info printed to stdout")
 
     yield
+
+    # ── Shutdown: save active transcript as safety net ─────────────
+    active = app.state.meeting.get_active_session()
+    if active and active.transcript_segments:
+        from app.routers.meeting import _save_transcript
+        logger.info(
+            f"Saving active transcript on shutdown "
+            f"({len(active.transcript_segments)} segments)"
+        )
+        _save_transcript(active)
+        app.state.meeting.end_session(active.session_id)
+
     app.state.transcription.cleanup()
     if app.state.llm:
         await app.state.llm.close()

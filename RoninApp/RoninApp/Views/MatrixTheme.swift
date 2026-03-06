@@ -48,6 +48,14 @@ extension Color {
 
     // Glow
     static let matrixGlow = Color(red: 0, green: 1.0, blue: 0.255)
+
+    // Reading-optimized colors (research: reduce saturation for sustained reading)
+    /// Softened green for body text — less saturated to reduce eye fatigue
+    /// ~8:1 contrast on dark bg, HSL(120°, 35%, 62%) vs standard matrixText HSL(120°, 60%, 50%)
+    static let matrixReadable = Color(red: 0.45, green: 0.78, blue: 0.45)
+    /// Panel reading background — slight green tint off pure black to reduce halation
+    /// Research: never use pure #000000 for sustained reading areas
+    static let matrixPanel = Color(red: 0.01, green: 0.035, blue: 0.01)
 }
 
 // MARK: - Matrix Fonts
@@ -61,6 +69,17 @@ extension Font {
     static let matrixCaption = Font.system(size: 11, weight: .regular, design: .monospaced)
     static let matrixCaption2 = Font.system(size: 10, weight: .regular, design: .monospaced)
     static let matrixBadge = Font.system(size: 9, weight: .bold, design: .monospaced)
+
+    // Reading-optimized variants (research: 14-15px min for sustained screen reading)
+    /// Transcript body — 14pt for scanning real-time speech
+    static let matrixTranscript = Font.system(size: 14, weight: .regular, design: .monospaced)
+    /// Response/suggestion text — 15pt for deep comprehension reading
+    static let matrixResponse = Font.system(size: 15, weight: .regular, design: .monospaced)
+    /// Bold response text for emphasis
+    static let matrixResponseBold = Font.system(size: 15, weight: .semibold, design: .monospaced)
+    /// Guidance body — 14pt matching transcript
+    static let matrixGuidance = Font.system(size: 14, weight: .regular, design: .monospaced)
+    static let matrixGuidanceBold = Font.system(size: 14, weight: .semibold, design: .monospaced)
 }
 
 // MARK: - Matrix ViewModifiers
@@ -81,13 +100,71 @@ struct MatrixGlowText: ViewModifier {
 struct MatrixCard: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding(10)
+            .padding(MatrixSpacing.cardPadding)
             .background(Color.matrixSurface.opacity(0.8))
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(Color.matrixBorder.opacity(0.4), lineWidth: 1)
             )
+    }
+}
+
+// MARK: - Resizable Panel Divider
+
+/// Draggable divider between resizable panels. Shows grip dots and changes cursor on hover.
+struct PanelDivider: View {
+    /// true = vertical bar separating horizontal panels; false = horizontal bar separating vertical panels
+    let isVertical: Bool
+    @State private var isHovered = false
+
+    var body: some View {
+        ZStack {
+            // Invisible hit target (wider than visual)
+            Rectangle()
+                .fill(Color.clear)
+                .frame(
+                    width: isVertical ? MatrixSpacing.dividerGrabWidth : nil,
+                    height: isVertical ? nil : MatrixSpacing.dividerGrabWidth
+                )
+                .contentShape(Rectangle())
+
+            // Visual line
+            Rectangle()
+                .fill(isHovered ? Color.matrixBright.opacity(0.5) : Color.matrixBorder.opacity(0.4))
+                .frame(width: isVertical ? 1 : nil, height: isVertical ? nil : 1)
+
+            // Grip dots
+            if isVertical {
+                VStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Circle()
+                            .fill(isHovered ? Color.matrixBright.opacity(0.8) : Color.matrixDim.opacity(0.5))
+                            .frame(width: 3, height: 3)
+                    }
+                }
+            } else {
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Circle()
+                            .fill(isHovered ? Color.matrixBright.opacity(0.8) : Color.matrixDim.opacity(0.5))
+                            .frame(width: 3, height: 3)
+                    }
+                }
+            }
+        }
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering {
+                if isVertical {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.resizeUpDown.push()
+                }
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 }
 
@@ -215,12 +292,28 @@ enum MatrixSpacing {
     static let barPaddingH: CGFloat = 16
     /// Vertical padding for bars and headers (8pt)
     static let barPaddingV: CGFloat = 8
-    /// Card internal padding (10pt)
-    static let cardPadding: CGFloat = 10
+    /// Card internal padding (10pt → 12pt for breathing room)
+    static let cardPadding: CGFloat = 12
     /// Outer padding for settings/overlay pages (24pt)
     static let outerPadding: CGFloat = 24
     /// Standard corner radius (6pt)
     static let cornerRadius: CGFloat = 6
+
+    // Reading-optimized spacing (evidence-based)
+    /// Line spacing for transcript text (~1.4x at 14pt ≈ 6pt leading)
+    static let transcriptLineSpacing: CGFloat = 6
+    /// Line spacing for response/suggestion text (~1.5x at 15pt ≈ 8pt leading)
+    static let responseLineSpacing: CGFloat = 8
+    /// Line spacing for guidance body text (~1.45x at 14pt ≈ 6pt leading)
+    static let guidanceLineSpacing: CGFloat = 6
+    /// Visual gap between different speaker turns (research: 12-16pt)
+    static let speakerTurnGap: CGFloat = 14
+    /// Max text width for optimal reading (~60 CPL at 15pt mono ≈ 580pt)
+    static let maxReadingWidth: CGFloat = 580
+    /// Draggable divider hit-target width
+    static let dividerGrabWidth: CGFloat = 8
+    /// Spacing between suggestion cards
+    static let cardGap: CGFloat = 14
 }
 
 // MARK: - Matrix TextField Style

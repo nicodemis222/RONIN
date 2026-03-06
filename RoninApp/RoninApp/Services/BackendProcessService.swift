@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import os.log
 
@@ -37,6 +38,22 @@ class BackendProcessService: ObservableObject {
     /// Used to authenticate all HTTP and WebSocket requests.
     @Published var authToken: String = ""
 
+    /// Startup dependency check states
+    @Published var dependencies: [DependencyCheck] = [
+        .pythonRuntime(.pending),
+        .backendProcess(.pending),
+        .whisperModel(.pending),
+        .llmProvider(.pending, detail: ""),
+        .microphoneAccess(.pending),
+    ]
+
+    /// True when every dependency has passed (or been acceptably skipped)
+    var allDependenciesPassed: Bool {
+        dependencies.allSatisfy { dep in
+            dep.state.isPassed || dep.state.isSkipped
+        }
+    }
+
     /// Recent backend log lines (last 200 lines, captured from stdout/stderr)
     @Published var recentLogs: [String] = []
     private let maxLogLines = 200
@@ -74,6 +91,15 @@ class BackendProcessService: ObservableObject {
         status = .starting
         recentLogs = []
 
+        // Reset dependency states
+        dependencies = [
+            .pythonRuntime(.checking),
+            .backendProcess(.pending),
+            .whisperModel(.pending),
+            .llmProvider(.pending, detail: ""),
+            .microphoneAccess(.pending),
+        ]
+
         // Determine paths — support both bundled (Resources/) and dev mode
         let resourcePath: String
         let pythonPath: String
@@ -88,7 +114,9 @@ class BackendProcessService: ObservableObject {
             pythonPath = bundlePath + "/python/bin/python3.14"
             backendDir = bundlePath + "/backend"
             sitePackagesPath = bundlePath + "/python/lib/python3.14/site-packages"
-            modelCachePath = bundlePath + "/models/huggingface/hub"
+            // Only set model cache if models were bundled (may be absent if built without Whisper)
+            let candidateCache = bundlePath + "/models/huggingface/hub"
+            modelCachePath = FileManager.default.fileExists(atPath: candidateCache) ? candidateCache : nil
             appendLog("[RONIN] Bundled mode — Resources: \(bundlePath)")
         } else {
             // --- Dev mode (running from Xcode) ---
@@ -108,11 +136,14 @@ class BackendProcessService: ObservableObject {
         if let mc = modelCachePath { appendLog("[RONIN] Model cache: \(mc)") }
 
         guard FileManager.default.fileExists(atPath: pythonPath) else {
+            updateDependency(.pythonRuntime(.failed("Not found at: \(pythonPath)")))
             status = .failed("Python not found at: \(pythonPath)")
             return
         }
+        updateDependency(.pythonRuntime(.passed))
 
         guard FileManager.default.fileExists(atPath: runScript) else {
+            updateDependency(.backendProcess(.failed("run.py not found")))
             status = .failed("Backend not found at: \(runScript)")
             return
         }
@@ -123,10 +154,13 @@ class BackendProcessService: ObservableObject {
             if killProcessOnPort(8000) {
                 appendLog("[RONIN] Orphaned process killed, port freed")
             } else {
+                updateDependency(.backendProcess(.failed("Port 8000 in use")))
                 status = .failed("Port 8000 is in use by another application. Close it and try again.")
                 return
             }
         }
+
+        updateDependency(.backendProcess(.checking))
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: pythonPath)
@@ -135,14 +169,17 @@ class BackendProcessService: ObservableObject {
 
         var env: [String: String] = [
             "PYTHONPATH": sitePackagesPath,
-            "HF_HUB_OFFLINE": "1",
             "PYTHONDONTWRITEBYTECODE": "1",
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
         ]
 
         if let modelCache = modelCachePath {
+            // Bundled mode: models are pre-cached, no network needed
             env["HF_HUB_CACHE"] = modelCache
+            env["HF_HUB_OFFLINE"] = "1"
         }
+        // Dev mode: allow HuggingFace downloads so the Whisper model can be
+        // fetched on first run (HF_HUB_OFFLINE is intentionally NOT set).
 
         // LLM provider settings from UserDefaults + Keychain
         let llmProvider = UserDefaults.standard.string(forKey: "ronin.llm.provider") ?? "local"
@@ -209,6 +246,7 @@ class BackendProcessService: ObservableObject {
             appendLog("[RONIN] Backend process launched (PID: \(proc.processIdentifier))")
             healthCheckTask = Task { await waitForHealth() }
         } catch {
+            updateDependency(.backendProcess(.failed("Launch failed")))
             status = .failed("Failed to launch backend: \(error.localizedDescription)")
         }
     }
@@ -231,6 +269,17 @@ class BackendProcessService: ObservableObject {
 
         let pid = proc.processIdentifier
         appendLog("[RONIN] Stopping backend (PID: \(pid))...")
+
+        // Request graceful shutdown (saves active transcript) before SIGTERM
+        let api = BackendAPIService()
+        api.authToken = authToken
+        Task {
+            let saved = await api.requestGracefulShutdown()
+            appendLog(saved
+                ? "[RONIN] Graceful shutdown: transcript saved"
+                : "[RONIN] Graceful shutdown: no transcript to save (or timeout)")
+        }
+
         proc.terminate() // SIGTERM
 
         // Give it 3 seconds then force kill
@@ -262,6 +311,10 @@ class BackendProcessService: ObservableObject {
             }
 
             let pid = proc.processIdentifier
+
+            // Synchronous graceful shutdown — save active transcript before SIGTERM
+            _syncGracefulShutdown()
+
             logger.info("stopSync: sending SIGTERM to PID \(pid)")
             proc.terminate()
 
@@ -281,6 +334,35 @@ class BackendProcessService: ObservableObject {
 
             logger.info("stopSync: backend process terminated")
             process = nil
+        }
+    }
+
+    /// Blocking HTTP call to /meeting/shutdown (2s timeout).
+    /// Called from stopSync() during app termination where async is unavailable.
+    private func _syncGracefulShutdown() {
+        guard !authToken.isEmpty,
+              let url = URL(string: "http://127.0.0.1:8000/meeting/shutdown") else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 2
+
+        let semaphore = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var success = false
+
+        let task = URLSession.shared.dataTask(with: request) { _, response, _ in
+            success = (response as? HTTPURLResponse)?.statusCode == 200
+            semaphore.signal()
+        }
+        task.resume()
+
+        let result = semaphore.wait(timeout: .now() + 2)
+        if result == .timedOut {
+            logger.warning("stopSync: graceful shutdown timed out")
+            task.cancel()
+        } else {
+            logger.info("stopSync: graceful shutdown \(success ? "saved transcript" : "no active transcript")")
         }
     }
 
@@ -311,12 +393,20 @@ class BackendProcessService: ObservableObject {
 
             if await api.checkHealth() {
                 appendLog("[RONIN] Health check passed on attempt \(attempt)")
+                updateDependency(.backendProcess(.passed))
                 status = .running
+
+                // Fetch detailed subsystem status
+                await checkDetailedHealth(api: api)
+
+                // Check microphone permission
+                checkMicrophonePermission()
                 return
             }
 
             // Check if process died during startup
             if let proc = process, !proc.isRunning {
+                updateDependency(.backendProcess(.failed("Exited during startup")))
                 status = .failed("Backend process exited during startup")
                 return
             }
@@ -326,7 +416,85 @@ class BackendProcessService: ObservableObject {
                 status = .starting
             }
         }
+        updateDependency(.backendProcess(.failed("Health timeout")))
         status = .failed("Backend did not respond within 30 seconds")
+    }
+
+    // MARK: - Detailed Health
+
+    /// Query /health?details=true and update whisper + LLM dependency states.
+    private func checkDetailedHealth(api: BackendAPIService) async {
+        api.authToken = authToken
+
+        guard let details = await api.checkHealthDetailed() else {
+            appendLog("[RONIN] Detailed health check failed — skipping dependency update")
+            updateDependency(.whisperModel(.skipped("Could not query")))
+            updateDependency(.llmProvider(.skipped("Could not query"), detail: ""))
+            return
+        }
+
+        // Whisper
+        if let whisper = details.dependencies["whisper"] {
+            if whisper.status == "loaded" || whisper.status == "available" {
+                updateDependency(.whisperModel(.passed))
+                appendLog("[RONIN] Whisper: \(whisper.status) (\(whisper.model ?? "unknown"))")
+            } else {
+                updateDependency(.whisperModel(.failed(whisper.detail ?? "Not loaded")))
+                appendLog("[RONIN] Whisper: \(whisper.status)")
+            }
+        } else {
+            updateDependency(.whisperModel(.failed("Not reported")))
+        }
+
+        // LLM
+        if let llm = details.dependencies["llm"] {
+            let provider = llm.provider ?? "unknown"
+            if llm.status == "ok" || llm.status == "connected" {
+                let detail = llm.model ?? provider
+                updateDependency(.llmProvider(.passed, detail: detail))
+                appendLog("[RONIN] LLM: \(provider) (\(llm.model ?? "default"))")
+            } else if llm.status == "none" {
+                updateDependency(.llmProvider(.skipped("Transcription-only mode"), detail: "none"))
+                appendLog("[RONIN] LLM: none (transcription-only)")
+            } else {
+                updateDependency(.llmProvider(.failed(llm.detail ?? "Unreachable"), detail: provider))
+                appendLog("[RONIN] LLM: \(llm.status) — \(llm.detail ?? "")")
+            }
+        } else {
+            updateDependency(.llmProvider(.skipped("Not reported"), detail: ""))
+        }
+    }
+
+    // MARK: - Microphone Permission
+
+    /// Check current microphone authorization without prompting.
+    /// .notDetermined is treated as "skipped" — the OS will prompt when the meeting starts.
+    private func checkMicrophonePermission() {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            updateDependency(.microphoneAccess(.passed))
+            appendLog("[RONIN] Microphone: authorized")
+        case .notDetermined:
+            updateDependency(.microphoneAccess(.skipped("Will request when meeting starts")))
+            appendLog("[RONIN] Microphone: not yet requested")
+        case .denied:
+            updateDependency(.microphoneAccess(.failed("Denied — enable in System Settings > Privacy > Microphone")))
+            appendLog("[RONIN] Microphone: denied")
+        case .restricted:
+            updateDependency(.microphoneAccess(.failed("Restricted by system policy")))
+            appendLog("[RONIN] Microphone: restricted")
+        @unknown default:
+            updateDependency(.microphoneAccess(.skipped("Unknown status")))
+        }
+    }
+
+    // MARK: - Dependency Helpers
+
+    /// Update a single dependency in the array by matching on its `id`.
+    private func updateDependency(_ dep: DependencyCheck) {
+        if let idx = dependencies.firstIndex(where: { $0.id == dep.id }) {
+            dependencies[idx] = dep
+        }
     }
 
     // MARK: - Helpers

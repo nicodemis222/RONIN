@@ -6,6 +6,15 @@ struct LiveCopilotView: View {
     @EnvironmentObject var backendService: BackendProcessService
     @EnvironmentObject var viewModel: LiveCopilotViewModel
 
+    // Resizable panel proportions (persisted)
+    @AppStorage("ronin.transcriptProportion") private var transcriptProportion: Double = 0.30
+    @AppStorage("ronin.guidanceProportion") private var guidanceProportion: Double = 0.27
+    // Suggestions gets: 1.0 - transcriptProportion - guidanceProportion
+
+    // Drag state for dividers
+    @State private var divider1DragStart: Double?
+    @State private var divider2DragStart: Double?
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -391,41 +400,133 @@ struct LiveCopilotView: View {
         }
     }
 
+    // MARK: - Full Content (resizable 3-panel)
+
+    /// Minimum proportion for any panel (prevents collapsing below usable size)
+    private let minProportion: Double = 0.15
+    /// Minimum proportion for the middle (suggestions) panel
+    private let minMiddle: Double = 0.20
+
     private var fullContent: some View {
         GeometryReader { geo in
             let vertical = shouldUseVerticalLayout(in: geo.size)
 
             if vertical {
-                VStack(spacing: 0) {
-                    TranscriptPanelView(segments: viewModel.transcriptSegments)
-                        .frame(minHeight: 100, maxHeight: .infinity)
-
-                    Divider().overlay(Color.matrixDivider)
-
-                    SuggestionsPanelView(suggestions: viewModel.suggestions, onCopy: { viewModel.copyText($0) })
-                        .frame(minHeight: 100, maxHeight: .infinity)
-
-                    Divider().overlay(Color.matrixDivider)
-
-                    GuidancePanelView(guidance: viewModel.guidance)
-                        .frame(minHeight: 100, maxHeight: .infinity)
-                }
+                verticalResizableLayout(totalSize: geo.size.height)
             } else {
-                HStack(spacing: 0) {
-                    TranscriptPanelView(segments: viewModel.transcriptSegments)
-                        .frame(minWidth: 250, maxWidth: .infinity)
-
-                    Divider().overlay(Color.matrixDivider)
-
-                    SuggestionsPanelView(suggestions: viewModel.suggestions, onCopy: { viewModel.copyText($0) })
-                        .frame(minWidth: 280, maxWidth: .infinity)
-
-                    Divider().overlay(Color.matrixDivider)
-
-                    GuidancePanelView(guidance: viewModel.guidance)
-                        .frame(minWidth: 220, maxWidth: .infinity)
-                }
+                horizontalResizableLayout(totalSize: geo.size.width)
             }
+        }
+    }
+
+    private func horizontalResizableLayout(totalSize: CGFloat) -> some View {
+        let dividerWidth = MatrixSpacing.dividerGrabWidth
+        let available = totalSize - dividerWidth * 2
+        let w1 = max(200, available * transcriptProportion)
+        let w3 = max(180, available * guidanceProportion)
+        // Suggestions gets the rest
+        let w2 = max(220, available - w1 - w3)
+
+        return HStack(spacing: 0) {
+            TranscriptPanelView(segments: viewModel.transcriptSegments)
+                .frame(width: w1)
+                .background(Color.matrixPanel)
+
+            // Divider 1: between Transcript and Suggestions
+            PanelDivider(isVertical: true)
+                .gesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { value in
+                            if divider1DragStart == nil {
+                                divider1DragStart = transcriptProportion
+                            }
+                            let delta = Double(value.translation.width) / Double(available)
+                            let proposed = divider1DragStart! + delta
+                            let maxVal = 1.0 - guidanceProportion - minMiddle
+                            transcriptProportion = max(minProportion, min(maxVal, proposed))
+                        }
+                        .onEnded { _ in
+                            divider1DragStart = nil
+                        }
+                )
+
+            SuggestionsPanelView(suggestions: viewModel.suggestions, onCopy: { viewModel.copyText($0) })
+                .frame(width: w2)
+                .background(Color.matrixPanel)
+
+            // Divider 2: between Suggestions and Guidance
+            PanelDivider(isVertical: true)
+                .gesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { value in
+                            if divider2DragStart == nil {
+                                divider2DragStart = guidanceProportion
+                            }
+                            let delta = Double(value.translation.width) / Double(available)
+                            let proposed = divider2DragStart! - delta // dragging right shrinks guidance
+                            let maxVal = 1.0 - transcriptProportion - minMiddle
+                            guidanceProportion = max(minProportion, min(maxVal, proposed))
+                        }
+                        .onEnded { _ in
+                            divider2DragStart = nil
+                        }
+                )
+
+            GuidancePanelView(guidance: viewModel.guidance)
+                .frame(minWidth: 180, maxWidth: .infinity)
+                .background(Color.matrixPanel)
+        }
+    }
+
+    private func verticalResizableLayout(totalSize: CGFloat) -> some View {
+        let dividerHeight = MatrixSpacing.dividerGrabWidth
+        let available = totalSize - dividerHeight * 2
+        let h1 = max(100, available * transcriptProportion)
+        let h3 = max(80, available * guidanceProportion)
+        let h2 = max(100, available - h1 - h3)
+
+        return VStack(spacing: 0) {
+            TranscriptPanelView(segments: viewModel.transcriptSegments)
+                .frame(height: h1)
+                .background(Color.matrixPanel)
+
+            PanelDivider(isVertical: false)
+                .gesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { value in
+                            if divider1DragStart == nil {
+                                divider1DragStart = transcriptProportion
+                            }
+                            let delta = Double(value.translation.height) / Double(available)
+                            let proposed = divider1DragStart! + delta
+                            let maxVal = 1.0 - guidanceProportion - minMiddle
+                            transcriptProportion = max(minProportion, min(maxVal, proposed))
+                        }
+                        .onEnded { _ in divider1DragStart = nil }
+                )
+
+            SuggestionsPanelView(suggestions: viewModel.suggestions, onCopy: { viewModel.copyText($0) })
+                .frame(height: h2)
+                .background(Color.matrixPanel)
+
+            PanelDivider(isVertical: false)
+                .gesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { value in
+                            if divider2DragStart == nil {
+                                divider2DragStart = guidanceProportion
+                            }
+                            let delta = Double(value.translation.height) / Double(available)
+                            let proposed = divider2DragStart! - delta
+                            let maxVal = 1.0 - transcriptProportion - minMiddle
+                            guidanceProportion = max(minProportion, min(maxVal, proposed))
+                        }
+                        .onEnded { _ in divider2DragStart = nil }
+                )
+
+            GuidancePanelView(guidance: viewModel.guidance)
+                .frame(minHeight: 80, maxHeight: .infinity)
+                .background(Color.matrixPanel)
         }
     }
 }
