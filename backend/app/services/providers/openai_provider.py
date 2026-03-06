@@ -1,5 +1,6 @@
 """OpenAI (and OpenAI-compatible) API provider."""
 
+import asyncio
 import logging
 
 import httpx
@@ -79,10 +80,18 @@ class OpenAIProvider(BaseLLMProvider):
         logger.info(f"OpenAI model '{self.model}' — context: {ctx:,} tokens")
         return ctx, self.model
 
+    # Retry settings for 429 rate-limit errors
+    MAX_RETRIES_429 = 3
+    INITIAL_BACKOFF = 2.0  # seconds
+
     async def chat_completion(
         self, messages: list[dict], temperature: float, max_tokens: int
     ) -> str:
-        """Call the OpenAI-compatible chat completions endpoint."""
+        """Call the OpenAI-compatible chat completions endpoint.
+
+        Automatically retries on 429 (rate limit) errors with exponential
+        backoff, respecting the Retry-After header when provided.
+        """
         # Filter out Qwen thinking suppression messages
         filtered = [
             m for m in messages
@@ -96,28 +105,51 @@ class OpenAIProvider(BaseLLMProvider):
             "max_tokens": max_tokens,
         }
 
-        try:
-            response = await self.client.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-            response.raise_for_status()
-            result = response.json()
-            content = result["choices"][0]["message"]["content"]
-            logger.info(f"OpenAI response ({len(content)} chars)")
-            return content
-        except httpx.HTTPStatusError:
-            raise
-        except httpx.TimeoutException:
-            logger.error("OpenAI request timed out")
-            raise
-        except Exception as e:
-            logger.error(f"OpenAI request failed: {e}")
-            raise
+        last_error: httpx.HTTPStatusError | None = None
+        for attempt in range(self.MAX_RETRIES_429 + 1):
+            try:
+                response = await self.client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                logger.info(f"OpenAI response ({len(content)} chars)")
+                return content
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429 and attempt < self.MAX_RETRIES_429:
+                    last_error = e
+                    # Respect Retry-After header if present, otherwise exponential backoff
+                    retry_after = e.response.headers.get("retry-after")
+                    if retry_after:
+                        try:
+                            wait = min(float(retry_after), 60.0)
+                        except ValueError:
+                            wait = self.INITIAL_BACKOFF * (2 ** attempt)
+                    else:
+                        wait = self.INITIAL_BACKOFF * (2 ** attempt)
+                    logger.warning(
+                        f"Rate limited (429) — retrying in {wait:.1f}s "
+                        f"(attempt {attempt + 1}/{self.MAX_RETRIES_429})"
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+            except httpx.TimeoutException:
+                logger.error("OpenAI request timed out")
+                raise
+            except Exception as e:
+                logger.error(f"OpenAI request failed: {e}")
+                raise
+
+        # All retries exhausted — re-raise the last 429 error
+        assert last_error is not None
+        raise last_error
 
     async def close(self):
         await self.client.aclose()

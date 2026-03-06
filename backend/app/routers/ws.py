@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 # Track active WebSocket connections by ID (robust, never drifts)
 _active_connections: set[str] = set()
 
+# Maximum cooldown after repeated rate-limit failures (2 minutes)
+_MAX_COOLDOWN = 120.0
+
 
 def _verify_ws_token(websocket: WebSocket) -> bool:
     """Verify the auth token on WebSocket connections via query parameter."""
@@ -76,6 +79,14 @@ async def audio_websocket(websocket: WebSocket):
     chunks_received = 0
     copilot_task: asyncio.Task | None = None  # Track the single in-flight call
 
+    # Dynamic cooldown: backs off after rate-limit errors, resets on success
+    effective_debounce = settings.llm_debounce_seconds
+    consecutive_failures = 0
+
+    # Shared state for copilot task to report rate-limit back to main loop.
+    # Using a list as a simple mutable container (safe: single-threaded asyncio).
+    rate_limit_flag: list[bool] = [False]
+
     try:
         while True:
             data = await websocket.receive_bytes()
@@ -134,17 +145,49 @@ async def audio_websocket(websocket: WebSocket):
 
                 # Only trigger a new copilot call if:
                 #  1. LLM is configured (not transcription-only mode)
-                #  2. Debounce has elapsed
+                #  2. Debounce has elapsed (dynamic — increases after rate limits)
                 #  3. No copilot call is currently in-flight
                 if llm is not None:
                     now = asyncio.get_event_loop().time()
                     in_flight = copilot_task is not None and not copilot_task.done()
 
-                    if now - last_llm_call >= settings.llm_debounce_seconds and not in_flight:
+                    # ── Adapt debounce based on previous copilot result ──
+                    if copilot_task is not None and copilot_task.done():
+                        if rate_limit_flag[0]:
+                            # Rate limit hit — double the debounce (exponential backoff)
+                            consecutive_failures += 1
+                            effective_debounce = min(
+                                settings.llm_debounce_seconds * (2 ** consecutive_failures),
+                                _MAX_COOLDOWN,
+                            )
+                            logger.warning(
+                                f"Rate limit — debounce increased to "
+                                f"{effective_debounce:.0f}s "
+                                f"(failure #{consecutive_failures})"
+                            )
+                            rate_limit_flag[0] = False
+                        elif consecutive_failures > 0:
+                            # Previous call succeeded — restore normal debounce
+                            consecutive_failures = 0
+                            effective_debounce = settings.llm_debounce_seconds
+                            logger.info(
+                                f"Copilot succeeded — debounce restored to "
+                                f"{effective_debounce:.0f}s"
+                            )
+
+                    if now - last_llm_call >= effective_debounce and not in_flight:
                         last_llm_call = now
-                        logger.info("Triggering copilot LLM call")
+                        if effective_debounce > settings.llm_debounce_seconds:
+                            logger.info(
+                                f"Triggering copilot LLM call "
+                                f"(cooldown={effective_debounce:.0f}s)"
+                            )
+                        else:
+                            logger.info("Triggering copilot LLM call")
                         copilot_task = asyncio.create_task(
-                            _generate_and_send_copilot(websocket, llm, session)
+                            _generate_and_send_copilot(
+                                websocket, llm, session, rate_limit_flag
+                            )
                         )
                     elif in_flight:
                         logger.debug("Skipping copilot — previous call still in-flight")
@@ -165,7 +208,12 @@ async def audio_websocket(websocket: WebSocket):
         logger.info(f"WebSocket closed (active: {len(_active_connections)}, conn={conn_id})")
 
 
-async def _generate_and_send_copilot(websocket: WebSocket, llm, session):
+async def _generate_and_send_copilot(
+    websocket: WebSocket,
+    llm,
+    session,
+    rate_limit_flag: list[bool] | None = None,
+):
     try:
         recent_1min = session.get_recent_transcript(minutes=1)
         relevant_notes = session.notes_manager.get_relevant(recent_1min)
@@ -193,8 +241,13 @@ async def _generate_and_send_copilot(websocket: WebSocket, llm, session):
     except Exception as e:
         # Surface a user-friendly error message to the client
         error_msg = str(e)
-        if "429" in error_msg or "rate limit" in error_msg.lower():
+        is_rate_limit = "429" in error_msg or "rate limit" in error_msg.lower()
+
+        if is_rate_limit:
             user_msg = "LLM rate limit reached — suggestions paused temporarily"
+            # Signal to main loop to increase debounce
+            if rate_limit_flag is not None:
+                rate_limit_flag[0] = True
         elif "context" in error_msg.lower() or "n_ctx" in error_msg.lower():
             user_msg = "Transcript too long for model context — increase n_ctx in LLM settings"
         else:

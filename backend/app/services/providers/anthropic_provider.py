@@ -1,5 +1,6 @@
 """Anthropic Claude API provider."""
 
+import asyncio
 import logging
 
 import httpx
@@ -71,6 +72,10 @@ class AnthropicProvider(BaseLLMProvider):
         logger.info(f"Anthropic model '{self.model}' — context: {ctx:,} tokens")
         return ctx, self.model
 
+    # Retry settings for 429 rate-limit errors
+    MAX_RETRIES_429 = 3
+    INITIAL_BACKOFF = 2.0  # seconds
+
     async def chat_completion(
         self, messages: list[dict], temperature: float, max_tokens: int
     ) -> str:
@@ -78,6 +83,8 @@ class AnthropicProvider(BaseLLMProvider):
 
         Converts OpenAI-format messages (system/user/assistant roles)
         to Anthropic format (system as top-level param, messages list).
+        Automatically retries on 429 (rate limit) errors with exponential
+        backoff, respecting the Retry-After header when provided.
         """
         system_content = ""
         api_messages = []
@@ -103,35 +110,57 @@ class AnthropicProvider(BaseLLMProvider):
         if system_content:
             payload["system"] = system_content
 
-        try:
-            response = await self.client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": self.api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json=payload,
-            )
-            response.raise_for_status()
-            result = response.json()
+        last_error: httpx.HTTPStatusError | None = None
+        for attempt in range(self.MAX_RETRIES_429 + 1):
+            try:
+                response = await self.client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": self.api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                result = response.json()
 
-            # Anthropic returns content as a list of content blocks
-            text = "".join(
-                block["text"]
-                for block in result.get("content", [])
-                if block.get("type") == "text"
-            )
-            logger.info(f"Anthropic response ({len(text)} chars)")
-            return text
-        except httpx.HTTPStatusError:
-            raise
-        except httpx.TimeoutException:
-            logger.error("Anthropic request timed out")
-            raise
-        except Exception as e:
-            logger.error(f"Anthropic request failed: {e}")
-            raise
+                # Anthropic returns content as a list of content blocks
+                text = "".join(
+                    block["text"]
+                    for block in result.get("content", [])
+                    if block.get("type") == "text"
+                )
+                logger.info(f"Anthropic response ({len(text)} chars)")
+                return text
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429 and attempt < self.MAX_RETRIES_429:
+                    last_error = e
+                    retry_after = e.response.headers.get("retry-after")
+                    if retry_after:
+                        try:
+                            wait = min(float(retry_after), 60.0)
+                        except ValueError:
+                            wait = self.INITIAL_BACKOFF * (2 ** attempt)
+                    else:
+                        wait = self.INITIAL_BACKOFF * (2 ** attempt)
+                    logger.warning(
+                        f"Rate limited (429) — retrying in {wait:.1f}s "
+                        f"(attempt {attempt + 1}/{self.MAX_RETRIES_429})"
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+            except httpx.TimeoutException:
+                logger.error("Anthropic request timed out")
+                raise
+            except Exception as e:
+                logger.error(f"Anthropic request failed: {e}")
+                raise
+
+        # All retries exhausted — re-raise the last 429 error
+        assert last_error is not None
+        raise last_error
 
     async def close(self):
         await self.client.aclose()
