@@ -25,8 +25,7 @@ class AudioCaptureService: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
 
     // Lazy resampler — created/recreated when input format changes
     private var converter: AVAudioConverter?
-    private var lastSourceSampleRate: Double = 0
-    private var lastSourceChannels: UInt32 = 0
+    private var lastSourceFormat: AVAudioFormat?
     private let targetFormat: AVAudioFormat
 
     var onAudioChunk: ((Data) -> Void)?
@@ -259,12 +258,16 @@ class AudioCaptureService: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
             memcpy(bufferData[0], rawPtr, bytesToCopy)
         }
 
-        // Recreate converter if source format changed
-        if sourceSampleRate != lastSourceSampleRate || sourceChannels != lastSourceChannels {
-            lastSourceSampleRate = sourceSampleRate
-            lastSourceChannels = sourceChannels
+        // Recreate converter if source format changed.
+        // Compare the full AVAudioFormat (not just rate/channels) because call apps
+        // like WhatsApp can change format flags, bytes-per-frame, or interleaving
+        // while keeping the same sample rate and channel count.
+        let formatChanged = lastSourceFormat == nil || !sourceFormat.isEqual(lastSourceFormat!)
+        if formatChanged {
+            lastSourceFormat = sourceFormat
+            converter?.reset()
             converter = AVAudioConverter(from: sourceFormat, to: targetFormat)
-            logger.info("Converter: \(sourceSampleRate)Hz/\(sourceChannels)ch → 16000Hz/1ch")
+            logger.info("Converter: \(sourceSampleRate)Hz/\(sourceChannels)ch (flags=\(sourceASBD.mFormatFlags)) → 16000Hz/1ch")
             if converter == nil {
                 logger.error("Failed to create converter from \(sourceSampleRate)Hz/\(sourceChannels)ch")
             }
@@ -295,8 +298,12 @@ class AudioCaptureService: NSObject, AVCaptureAudioDataOutputSampleBufferDelegat
         }
 
         if let error = error {
-            if callbackCount <= 3 {
-                logger.error("Converter error: \(error.localizedDescription)")
+            // If converter fails (stale internal state from format transition),
+            // reset it so the next callback starts fresh
+            converter.reset()
+            self.lastSourceFormat = nil
+            if callbackCount <= 5 || callbackCount % 100 == 0 {
+                logger.warning("Converter error (will reset): \(error.localizedDescription)")
             }
             return
         }
