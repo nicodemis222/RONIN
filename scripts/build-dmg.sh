@@ -200,49 +200,131 @@ echo "  Site-packages trimmed"
 echo ""
 echo "=== Step 8: Fixing native extension rpaths ==="
 
-# Find .so/.dylib files that reference Homebrew paths
+# Directory for bundled third-party dylibs
+BUNDLED_LIBS="$RESOURCES/python/lib/bundled"
+mkdir -p "$BUNDLED_LIBS"
+
+# Helper: bundle a Homebrew dylib and rewrite the reference in the calling binary
+bundle_homebrew_dylib() {
+    local sofile="$1"
+    local ref="$2"
+    local LIBNAME=$(basename "$ref")
+
+    # Copy the dylib to bundled/ if not already there
+    if [ ! -f "$BUNDLED_LIBS/$LIBNAME" ]; then
+        if [ -f "$ref" ]; then
+            cp "$ref" "$BUNDLED_LIBS/$LIBNAME"
+            chmod 644 "$BUNDLED_LIBS/$LIBNAME"
+            install_name_tool -id "@loader_path/$LIBNAME" \
+                "$BUNDLED_LIBS/$LIBNAME" 2>/dev/null || true
+            BUNDLED_COUNT=$((BUNDLED_COUNT + 1))
+            echo "    Bundled: $LIBNAME"
+        fi
+    fi
+
+    # Rewrite the reference in the calling binary
+    SODIR=$(dirname "$sofile")
+    RELPATH=$(python3 -c "import os.path; print(os.path.relpath('$BUNDLED_LIBS', '$SODIR'))")
+    install_name_tool -change "$ref" \
+        "@loader_path/$RELPATH/$LIBNAME" \
+        "$sofile" 2>/dev/null || true
+}
+
+# Find .so/.dylib files that reference Homebrew paths and fix ALL references
+# (Python framework + third-party libs like libssl, libmpdec, libzstd, libomp)
 NEEDS_FIX=0
+BUNDLED_COUNT=0
 while IFS= read -r sofile; do
-    # Check if this .so references the Homebrew Python framework
     if otool -L "$sofile" 2>/dev/null | grep -q "/opt/homebrew"; then
         NEEDS_FIX=$((NEEDS_FIX + 1))
-        # Get all homebrew references
         while IFS= read -r ref; do
             if echo "$ref" | grep -q "Python"; then
                 # Fix Python framework reference
                 install_name_tool -change "$ref" \
                     "@loader_path/../../../../lib/Python" \
                     "$sofile" 2>/dev/null || true
+            else
+                bundle_homebrew_dylib "$sofile" "$ref"
             fi
         done < <(otool -L "$sofile" | grep "/opt/homebrew" | awk '{print $1}')
     fi
-done < <(find "$RESOURCES/python" -name "*.so" -o -name "*.dylib" 2>/dev/null | grep -v "python/lib/Python$")
+done < <(find "$RESOURCES/python" -name "*.so" -o -name "*.dylib" 2>/dev/null | grep -v "python/lib/Python$" | grep -v "python/lib/bundled/")
 
-echo "  Fixed $NEEDS_FIX native extensions"
+# Second pass: fix Homebrew references in the bundled dylibs themselves
+# (e.g., libssl references libcrypto, scipy references libomp)
+echo "  Resolving transitive dependencies in bundled dylibs..."
+for _pass in 1 2; do
+    FOUND_NEW=false
+    while IFS= read -r dylib; do
+        REFS=$(otool -L "$dylib" 2>/dev/null | grep "/opt/homebrew" | awk '{print $1}' || true)
+        if [ -n "$REFS" ]; then
+            while IFS= read -r ref; do
+                bundle_homebrew_dylib "$dylib" "$ref"
+                FOUND_NEW=true
+            done <<< "$REFS"
+        fi
+    done < <(find "$BUNDLED_LIBS" -name "*.dylib" 2>/dev/null || true)
+    if [ "$FOUND_NEW" = false ]; then
+        break
+    fi
+done
 
-# Step 8.5: Check for remaining Homebrew references (non-Python dylibs like libssl, libffi)
-echo "  Checking for remaining Homebrew references..."
-REMAINING=$(find "$RESOURCES/python" \( -name "*.so" -o -name "*.dylib" \) 2>/dev/null | while IFS= read -r sofile; do
-    otool -L "$sofile" 2>/dev/null | grep "/opt/homebrew" | grep -v "Python" | awk '{print $1}' | while IFS= read -r ref; do
-        echo "  ⚠️  $sofile → $ref"
-    done
-done)
+echo "  Fixed $NEEDS_FIX native extensions, bundled $BUNDLED_COUNT third-party dylibs"
+
+# Fix install names of ALL .dylib files to remove Homebrew references.
+# Some packages (e.g., PyTorch) ship .dylib files with Homebrew install names.
+# The install name is metadata only (not a runtime dependency), but fixing it
+# ensures the bundle is clean and verification passes.
+echo "  Cleaning up dylib install names..."
+while IFS= read -r dylib; do
+    INSTALL_NAME=$(otool -D "$dylib" 2>/dev/null | tail -1 || true)
+    if echo "$INSTALL_NAME" | grep -q "/opt/homebrew"; then
+        LIBNAME=$(basename "$dylib")
+        install_name_tool -id "@loader_path/$LIBNAME" "$dylib" 2>/dev/null || true
+    fi
+done < <(find "$RESOURCES/python" -name "*.dylib" 2>/dev/null | grep -v "python/lib/Python$" || true)
+
+# Verify no remaining Homebrew references (check dependencies only, not install names)
+echo "  Verifying no remaining Homebrew references..."
+REMAINING=""
+while IFS= read -r sofile; do
+    # Get dependency references (skip the file's own install name via tail +3)
+    # otool -L output: line 1 = filename, line 2 = install name (for dylibs), line 3+ = deps
+    # For .so files: line 1 = filename, line 2+ = deps (no install name)
+    REFS=$(otool -L "$sofile" 2>/dev/null | grep "/opt/homebrew" | awk '{print $1}' || true)
+    if [ -n "$REFS" ]; then
+        # Filter out the file's own install name
+        OWN_NAME=$(otool -D "$sofile" 2>/dev/null | tail -1 || true)
+        while IFS= read -r ref; do
+            if [ "$ref" != "$OWN_NAME" ]; then
+                REMAINING="$REMAINING  ⚠️  $(basename "$sofile") → $ref"$'\n'
+            fi
+        done <<< "$REFS"
+    fi
+done < <(find "$RESOURCES/python" \( -name "*.so" -o -name "*.dylib" \) 2>/dev/null || true)
 if [ -n "$REMAINING" ]; then
     echo "$REMAINING"
-    echo "  ⚠️  Some native extensions still reference Homebrew libraries."
-    echo "     These may cause runtime errors on machines without Homebrew."
-    echo "     Consider bundling these libraries or using static linking."
+    echo "  ⚠️  Some references could not be fixed. The DMG may not work on machines without Homebrew."
 else
-    echo "  No remaining Homebrew references — bundle is self-contained"
+    echo "  ✅ All Homebrew references resolved — bundle is self-contained"
 fi
 
-# Verify all binaries are arm64
+# Verify all binaries include arm64
 echo "  Verifying architecture..."
-NON_ARM64=$(find "$RESOURCES/python" \( -name "*.so" -o -name "*.dylib" \) -exec file {} \; 2>/dev/null | grep -v "arm64" | head -5)
+NON_ARM64=""
+while IFS= read -r sofile; do
+    # Check if the binary has an arm64 slice (fat or thin)
+    if ! file "$sofile" 2>/dev/null | grep -q "arm64"; then
+        NON_ARM64="$NON_ARM64  $(basename "$sofile"): $(file -b "$sofile" | head -1)"$'\n'
+    fi
+done < <(find "$RESOURCES/python" \( -name "*.so" -o -name "*.dylib" \) 2>/dev/null || true)
 if [ -n "$NON_ARM64" ]; then
-    echo "  ⚠️  Found non-arm64 binaries:"
+    echo "  ⚠️  Binaries without arm64 slice:"
     echo "$NON_ARM64"
 fi
+
+# Clean up broken symlinks and config dir
+find "$RESOURCES/python" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 
 # ==============================================================================
 # Step 9: Copy backend application code
