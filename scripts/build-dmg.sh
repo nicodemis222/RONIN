@@ -412,11 +412,16 @@ fi
 # 1. Sign the Python dylib
 codesign $PYTHON_SIGN_FLAGS "$RESOURCES/python/lib/Python" 2>&1
 
-# 2. Sign all .so native extensions
-find "$RESOURCES/python" -name "*.so" -exec \
+# 2. Sign all bundled third-party dylibs (libssl, libcrypto, libmpdec, etc.)
+find "$RESOURCES/python/lib/bundled" -name "*.dylib" -exec \
     codesign $PYTHON_SIGN_FLAGS {} \; 2>&1
 
-# 3. Sign the Python interpreter binary
+# 3. Sign all .so native extensions AND any other .dylib files
+find "$RESOURCES/python" \( -name "*.so" -o -name "*.dylib" \) \
+    ! -path "*/lib/Python" ! -path "*/lib/bundled/*" -exec \
+    codesign $PYTHON_SIGN_FLAGS {} \; 2>&1
+
+# 4. Sign the Python interpreter binary
 codesign $PYTHON_SIGN_FLAGS \
     "$RESOURCES/python/bin/python$PYTHON_VERSION" 2>&1
 
