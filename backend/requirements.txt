@@ -1,7 +1,13 @@
+# Runtime
 fastapi>=0.115.0
 uvicorn[standard]>=0.34.0
 mlx-whisper>=0.4.0
 httpx>=0.28.0
 numpy>=2.0.0
 pydantic>=2.10.0
+pydantic-settings>=2.0.0
 websockets>=14.0
+
+# Testing (install with: pip install -r requirements.txt)
+pytest>=9.0.0
+pytest-asyncio>=1.0.0

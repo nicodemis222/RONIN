@@ -541,7 +541,7 @@ class BackendProcessService: ObservableObject {
                 return url.path
             }
         }
-        return "/Users/matthewjohnson/RONIN"
+        return "/Users/matthewjohnson/Projects/RONIN"
     }
 
     private func isPortInUse(port: UInt16) -> Bool {

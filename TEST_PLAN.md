@@ -184,6 +184,8 @@
 
 ## 3. End-to-End Integration Tests
 
+### API Integration Tests
+
 Live backend startup on `http://127.0.0.1:8000` with auth token verification.
 
 | # | Test | Endpoint | Result |
@@ -195,6 +197,20 @@ Live backend startup on `http://127.0.0.1:8000` with auth token verification.
 | 5 | WebSocket auth rejection | `ws://127.0.0.1:8000/ws/audio` | ✅ HTTP 403 (no token) |
 | 6 | End meeting | `POST /meeting/end` | ✅ HTTP 200, summary JSON returned |
 | 7 | Graceful shutdown | `POST /meeting/shutdown` | ✅ HTTP 200 `{"status":"shutting_down"}` |
+
+### Audio Pipeline E2E Test (`scripts/test_pipeline.py`)
+
+Full pipeline test using macOS TTS-generated speech audio with auth token support.
+
+| # | Test | Result |
+|---|------|--------|
+| 1 | Health check | ✅ Backend healthy |
+| 2 | Meeting setup (with auth) | ✅ Session created |
+| 3 | WebSocket connection (with auth token) | ✅ Connected + ping/pong OK |
+| 4 | Send TTS audio + receive transcription | ✅ 4 transcript messages, Whisper correctly transcribed speech |
+| 5 | End meeting + summary generation | ✅ LLM generated structured summary |
+
+**Transcript output**: "Hello, this is a test of the Ronin transcription system. We are testing whether Whisper can transcribe speech correctly. The quick brown fox jumps over the lazy dog."
 
 ---
 
@@ -332,9 +348,10 @@ Live backend startup on `http://127.0.0.1:8000` with auth token verification.
 | Notes Manager | 18 | Loading, chunking, keywords, relevance, edge cases |
 | Transcription | 18 | Audio buffer, speech detection, delta extraction, hallucination filter |
 | WebSocket | 15 | Auth, connections, audio validation, message flow, errors |
-| E2E Integration | 7 | Full server lifecycle, auth flow, WebSocket rejection |
+| E2E API Integration | 7 | Full server lifecycle, auth flow, WebSocket rejection |
+| E2E Audio Pipeline | 5 | Health, setup, WebSocket, TTS audio transcription, summary |
 | UX Acceptance | 12 | All user-facing workflows end-to-end |
-| **Total** | **135** | |
+| **Total** | **140** | |
 
 ---
 
@@ -372,8 +389,8 @@ Live backend startup on `http://127.0.0.1:8000` with auth token verification.
 
 **v1.0.0 — Release Ready**
 
-- 128 unit tests passing (0 failures, 0.19s)
-- 7 end-to-end integration tests passing
+- 128 unit tests passing (0 failures)
+- 12 end-to-end integration tests passing (7 API + 5 audio pipeline)
 - 12 UX acceptance test suites verified
 - Swift Debug + Release builds clean
 - DMG distribution build verified (657 MB)

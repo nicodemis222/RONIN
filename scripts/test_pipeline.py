@@ -33,6 +33,16 @@ import numpy as np
 BASE_URL = "http://127.0.0.1:8000"
 WS_URL = "ws://127.0.0.1:8000/ws/audio"
 
+# Auth token — read from temp file or environment variable
+AUTH_TOKEN = os.environ.get("RONIN_AUTH_TOKEN", "")
+if not AUTH_TOKEN:
+    _token_file = os.path.join(tempfile.gettempdir(), "ronin_auth_token")
+    if os.path.exists(_token_file):
+        with open(_token_file) as f:
+            AUTH_TOKEN = f.read().strip()
+
+AUTH_HEADERS = {"Authorization": f"Bearer {AUTH_TOKEN}"} if AUTH_TOKEN else {}
+
 # Colors for terminal output
 GREEN = "\033[92m"
 RED = "\033[91m"
@@ -99,28 +109,35 @@ def generate_tts_audio(text="Hello, this is a test of the transcription system",
     try:
         with tempfile.NamedTemporaryFile(suffix=".aiff", delete=False) as f:
             aiff_path = f.name
-
-        # Use macOS 'say' to generate speech
-        os.system(f'say -o "{aiff_path}" "{text}"')
-
-        if not os.path.exists(aiff_path) or os.path.getsize(aiff_path) < 100:
-            raise FileNotFoundError("say command failed")
-
-        # Convert AIFF to raw PCM via ffmpeg
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             wav_path = f.name
 
-        os.system(
-            f'ffmpeg -y -i "{aiff_path}" -ar {sample_rate} -ac 1 -sample_fmt s16 "{wav_path}" 2>/dev/null'
+        # Use macOS 'say' to generate speech as AIFF
+        ret = os.system(f'say -o "{aiff_path}" "{text}"')
+        if ret != 0:
+            raise FileNotFoundError("say command failed")
+
+        if not os.path.exists(aiff_path) or os.path.getsize(aiff_path) < 100:
+            raise FileNotFoundError("say output too small")
+
+        # Convert AIFF to 16kHz mono 16-bit WAV using macOS built-in afconvert
+        ret = os.system(
+            f'afconvert -f WAVE -d LEI16@{sample_rate} -c 1 "{aiff_path}" "{wav_path}" 2>/dev/null'
         )
+        os.unlink(aiff_path)
+
+        if ret != 0 or not os.path.exists(wav_path) or os.path.getsize(wav_path) < 100:
+            if os.path.exists(wav_path):
+                os.unlink(wav_path)
+            raise FileNotFoundError("afconvert failed")
 
         with wave.open(wav_path, "rb") as wf:
             raw_data = wf.readframes(wf.getnframes())
 
-        os.unlink(aiff_path)
         os.unlink(wav_path)
 
         if len(raw_data) > 0:
+            log_info(f"TTS audio generated: {len(raw_data)} bytes ({len(raw_data) // 2 / sample_rate:.1f}s)")
             return raw_data
         raise ValueError("Empty audio")
 
@@ -160,6 +177,7 @@ async def test_meeting_setup():
             resp = await client.post(
                 f"{BASE_URL}/meeting/setup",
                 json=config,
+                headers=AUTH_HEADERS,
                 timeout=10,
             )
             if resp.status_code == 200:
@@ -179,8 +197,9 @@ async def test_websocket_connect():
     """Test 3: WebSocket connects and stays open"""
     print(f"\n{BOLD}Test 3: WebSocket Connection{RESET}")
     try:
+        ws_url = f"{WS_URL}?token={AUTH_TOKEN}" if AUTH_TOKEN else WS_URL
         ws = await asyncio.wait_for(
-            websockets.connect(WS_URL), timeout=5
+            websockets.connect(ws_url), timeout=5
         )
         log_pass(f"WebSocket connected to {WS_URL}")
         # Quick ping test
@@ -275,6 +294,7 @@ async def test_meeting_end(session_id: str):
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{BASE_URL}/meeting/end?session_id={session_id}",
+                headers=AUTH_HEADERS,
                 timeout=60,
             )
             if resp.status_code == 200:

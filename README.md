@@ -5,8 +5,9 @@ A local-first meeting copilot for macOS. Real-time transcription, AI-powered sug
 ![Version](https://img.shields.io/badge/version-1.0.0-00FF41)
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple&logoColor=00FF41)
 ![Swift](https://img.shields.io/badge/Swift-5.10-00FF41?logo=swift&logoColor=00FF41)
-![Python](https://img.shields.io/badge/Python-3.14-00FF41?logo=python&logoColor=00FF41)
+![Python](https://img.shields.io/badge/Python-3.13%2B-00FF41?logo=python&logoColor=00FF41)
 ![Tests](https://img.shields.io/badge/tests-128%20passing-00FF41)
+![E2E](https://img.shields.io/badge/E2E-5%20passing-00FF41)
 ![License](https://img.shields.io/badge/license-MIT-00FF41)
 
 ## What It Does
@@ -20,7 +21,7 @@ RONIN listens to your microphone during meetings and provides:
 - **Relevant facts** — surfaces info from your prep notes when the conversation touches on those topics
 - **Post-meeting summary** — executive summary, key decisions, action items, and open questions
 
-Everything runs locally by default. Audio never leaves your Mac. Choose between a local LLM via LM Studio or a cloud provider (OpenAI) — audio always stays on-device regardless.
+Everything runs locally by default. Audio never leaves your Mac. Choose between a local LLM via LM Studio or a cloud provider (OpenAI/Anthropic) — audio always stays on-device regardless.
 
 ## Architecture
 
@@ -61,9 +62,10 @@ The Swift app captures mic audio via `AVCaptureSession` (no aggregate device —
 |---|---|---|
 | **macOS** | 15.0+ | SwiftUI features, AVCaptureSession APIs |
 | **Xcode** | 16+ | Build the Swift app |
-| **Python** | 3.13+ | Backend runtime |
+| **Python** | 3.13+ | Backend runtime (3.14 supported) |
 | **LM Studio** | Latest | Local LLM inference (or use OpenAI/Anthropic instead) |
 | **Apple Silicon** | M1+ | MLX Whisper requires Metal |
+| **XcodeGen** | Latest | Generates Xcode project from `project.yml` (install via `brew install xcodegen`) |
 
 ## Setup
 
@@ -107,8 +109,10 @@ If no LLM is configured, RONIN still captures and saves the full transcript. You
 ### 4. Build and run the Swift app
 
 ```bash
+brew install xcodegen    # if not already installed
 cd RONIN/RoninApp
-xcodebuild -scheme RoninApp -configuration Debug build
+xcodegen generate        # generate .xcodeproj from project.yml
+xcodebuild -scheme RoninApp -configuration Debug build -destination 'platform=macOS'
 ```
 
 Or open `RoninApp.xcodeproj` in Xcode and hit Run (⌘R).
@@ -123,7 +127,7 @@ First-time users see an onboarding tutorial walkthrough. You can re-launch it an
 
 1. **Title** — Name your meeting
 2. **Goal** — What you want to achieve (e.g., "Negotiate contract terms under $50k")
-3. **Notes Pack** — Drag and drop `.md` or `.txt` files with prep material, background info, or reference data
+3. **Notes Pack** — Drag and drop files with prep material, background info, or reference data. Supported formats: PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), Markdown (.md), plain text (.txt), and CSV
 4. **Constraints** — Rules the copilot should follow (e.g., "Do not agree to timeline shorter than 6 months")
 5. Click **Start Listening**
 
@@ -184,6 +188,58 @@ Backend settings in `backend/app/config.py`:
 | `whisper_no_speech_threshold` | `0.6` | Filter non-speech segments (music, noise) |
 | `whisper_logprob_threshold` | `-1.0` | Filter low-confidence Whisper output |
 | `whisper_compression_threshold` | `2.4` | Filter repetitive hallucinations |
+
+## Dependencies
+
+### Python Backend (runtime)
+
+All packages are listed in `backend/requirements.txt`:
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| [FastAPI](https://fastapi.tiangolo.com) | >=0.115.0 | REST API and WebSocket server |
+| [Uvicorn](https://www.uvicorn.org) | >=0.34.0 | ASGI server (with `standard` extras for WebSocket support) |
+| [MLX Whisper](https://github.com/ml-explore/mlx-examples) | >=0.4.0 | On-device speech-to-text via Apple Silicon Metal |
+| [httpx](https://www.python-httpx.org) | >=0.28.0 | Async HTTP client for LLM provider APIs |
+| [NumPy](https://numpy.org) | >=2.0.0 | Audio signal processing |
+| [Pydantic](https://docs.pydantic.dev) | >=2.10.0 | Request/response validation and schemas |
+| [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) | >=2.0.0 | Configuration management from environment variables |
+| [websockets](https://websockets.readthedocs.io) | >=14.0 | WebSocket protocol support |
+
+### Python Backend (development/testing)
+
+Install with `pip install pytest pytest-asyncio`:
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| [pytest](https://docs.pytest.org) | >=9.0.0 | Test framework (128 unit tests) |
+| [pytest-asyncio](https://pytest-asyncio.readthedocs.io) | >=1.0.0 | Async test support |
+
+### Swift App (macOS system frameworks — no third-party dependencies)
+
+The Swift app uses only Apple-provided frameworks:
+
+| Framework | Purpose |
+|-----------|---------|
+| SwiftUI | Declarative UI |
+| Foundation | Core types, networking, JSON |
+| AppKit | macOS-specific UI (pasteboard, windows) |
+| AVFoundation | Microphone audio capture |
+| CoreMedia | Media sample buffers |
+| PDFKit | PDF text extraction for notes |
+| UniformTypeIdentifiers | File type identification |
+| Security | Keychain API key storage |
+| os.log | Structured logging |
+| XCTest | Unit testing (test target only) |
+
+### System Requirements
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| Python 3.13+ | Backend runtime | `brew install python` or [python.org](https://python.org) |
+| Xcode 16+ | Build the Swift app | Mac App Store |
+| XcodeGen | Generate .xcodeproj from project.yml | `brew install xcodegen` |
+| LM Studio | Local LLM inference (optional) | [lmstudio.ai](https://lmstudio.ai) |
 
 ## Project Structure
 
@@ -278,16 +334,33 @@ RONIN/
 ```bash
 cd RONIN/backend
 source .venv/bin/activate
+pip install pytest pytest-asyncio
 python -m pytest tests/ -v
 ```
 
 128 tests covering: REST API, WebSocket protocol, transcription pipeline, LLM client normalization, context window management, notes engine, and session state.
 
+### Run end-to-end pipeline test
+
+Requires the backend to be running:
+
+```bash
+cd RONIN/backend
+source .venv/bin/activate
+python run.py &
+
+# In another terminal (or set the token from stdout):
+RONIN_AUTH_TOKEN=<token-from-startup> python scripts/test_pipeline.py
+```
+
+The E2E test exercises the full pipeline: health check, meeting setup, WebSocket connection, TTS audio generation, Whisper transcription, and meeting summary generation. The auth token is printed to stdout on backend startup and also written to a temp file.
+
 ### Run Swift build verification
 
 ```bash
 cd RONIN/RoninApp
-xcodebuild build -scheme RoninApp -configuration Debug
+xcodegen generate       # Generate .xcodeproj from project.yml
+xcodebuild build -scheme RoninApp -configuration Debug -destination 'platform=macOS'
 ```
 
 See [TEST_PLAN.md](TEST_PLAN.md) for the full v1.0 test report including end-to-end integration tests and UX acceptance test results.
@@ -309,7 +382,8 @@ The audio pipeline:
 
 ### Backend won't start
 - Check `~/Library/Logs/Ronin/backend.log` for errors
-- Make sure Python 3.13+ is installed and the venv is set up
+- Make sure Python 3.13+ is installed and the venv is set up (`python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`)
+- If you see `ModuleNotFoundError: No module named 'pydantic_settings'`, run `pip install pydantic-settings`
 - Ensure port 8000 is free (`lsof -i :8000`)
 
 ### No transcription

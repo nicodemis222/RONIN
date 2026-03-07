@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct MeetingPrepView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var backendService: BackendProcessService
+    @EnvironmentObject var tutorialVM: TutorialViewModel
     @StateObject private var viewModel = MeetingPrepViewModel()
     @State private var isTargeted = false
 
@@ -22,6 +23,17 @@ struct MeetingPrepView: View {
                     if backendService.status.isRunning && backendService.allDependenciesPassed {
                         backendStatusBadge
                     }
+
+                    // Tutorial button
+                    Button {
+                        tutorialVM.relaunchTutorial()
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                            .font(.title2)
+                            .foregroundColor(.matrixDim)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show Tutorial")
 
                     // Settings gear button
                     SettingsLink {
@@ -66,7 +78,7 @@ struct MeetingPrepView: View {
                                 Image(systemName: "doc.badge.plus")
                                     .font(.title2)
                                     .foregroundColor(.matrixDim)
-                                Text("Drop .md or .txt files here")
+                                Text("Drop files here — PDF, Word, Excel, PowerPoint, text")
                                     .font(.matrixCaption)
                                     .foregroundColor(.matrixDim)
                             }
@@ -79,10 +91,7 @@ struct MeetingPrepView: View {
                     Button("Choose Files...") {
                         let panel = NSOpenPanel()
                         panel.allowsMultipleSelection = true
-                        panel.allowedContentTypes = [
-                            UTType.plainText,
-                            UTType(filenameExtension: "md") ?? .plainText,
-                        ]
+                        panel.allowedContentTypes = MeetingPrepViewModel.supportedNoteTypes
                         if panel.runModal() == .OK {
                             viewModel.addNoteFiles(urls: panel.urls)
                         }
@@ -91,7 +100,7 @@ struct MeetingPrepView: View {
 
                     ForEach(viewModel.noteFiles) { file in
                         HStack {
-                            Image(systemName: "doc.text")
+                            Image(systemName: MeetingPrepViewModel.iconForFile(named: file.name))
                                 .foregroundColor(.matrixDim)
                             Text(file.name)
                                 .font(.matrixBody)

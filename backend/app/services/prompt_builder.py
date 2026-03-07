@@ -34,11 +34,16 @@ MEETING CONTEXT:
 
 INSTRUCTIONS:
 1. Write a concise executive summary (3-5 sentences).
-2. List all key decisions made during the meeting.
-3. Extract all action items with assignee (if mentioned) and deadline (if mentioned).
-4. Note any unresolved questions or topics that need follow-up.
+2. List ALL key decisions made during the meeting. Include the context/reasoning for each.
+3. Extract ALL action items — anything someone agreed to do, needs to follow up on, or was assigned. Include assignee and deadline if mentioned, use empty strings otherwise.
+4. List ALL unresolved questions, open issues, or topics that still need follow-up.
 
-Respond ONLY with valid JSON matching the required schema."""
+IMPORTANT: Do NOT leave decisions, action_items, or unresolved as empty arrays unless the meeting truly had none. Most meetings produce at least some action items and open questions.
+
+Respond ONLY with valid JSON in this exact format:
+{{"executive_summary": "3-5 sentence summary", "decisions": [{{"decision": "what was decided", "context": "why"}}], "action_items": [{{"action": "what needs doing", "assignee": "who", "deadline": "when"}}], "unresolved": ["open question or issue"]}}
+
+Output ONLY valid JSON. No explanation, no preamble."""
 
 
 COPILOT_RESPONSE_SCHEMA = {
