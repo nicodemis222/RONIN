@@ -14,9 +14,15 @@ DMG_NAME="Ronin"
 XCODE_PROJECT="$PROJECT_ROOT/RoninApp/RoninApp.xcodeproj"
 BACKEND_DIR="$PROJECT_ROOT/backend"
 
-# Python framework location (Homebrew)
+# Python framework location (Homebrew — auto-detect patch version)
 PYTHON_VERSION="3.14"
-PYTHON_FRAMEWORK="/opt/homebrew/Cellar/python@$PYTHON_VERSION/3.14.2/Frameworks/Python.framework/Versions/3.14"
+PYTHON_CELLAR="/opt/homebrew/Cellar/python@$PYTHON_VERSION"
+if [ -d "$PYTHON_CELLAR" ]; then
+    PYTHON_PATCH=$(ls -1 "$PYTHON_CELLAR" | sort -V | tail -1)
+    PYTHON_FRAMEWORK="$PYTHON_CELLAR/$PYTHON_PATCH/Frameworks/Python.framework/Versions/$PYTHON_VERSION"
+else
+    PYTHON_FRAMEWORK=""
+fi
 
 # Whisper model cache
 WHISPER_MODEL_CACHE="$HOME/.cache/huggingface/hub/models--mlx-community--whisper-small-mlx"
@@ -71,7 +77,7 @@ xcodebuild -project "$XCODE_PROJECT" \
     -scheme RoninApp \
     -configuration Release \
     -derivedDataPath "$BUILD_DIR/derived" \
-    ONLY_ACTIVE_ARCH=YES \
+    ONLY_ACTIVE_ARCH=NO \
     build 2>&1 | tail -5
 
 APP_PATH=$(find "$BUILD_DIR/derived" -name "$APP_NAME.app" -type d | head -1)
@@ -214,6 +220,30 @@ done < <(find "$RESOURCES/python" -name "*.so" -o -name "*.dylib" 2>/dev/null | 
 
 echo "  Fixed $NEEDS_FIX native extensions"
 
+# Step 8.5: Check for remaining Homebrew references (non-Python dylibs like libssl, libffi)
+echo "  Checking for remaining Homebrew references..."
+REMAINING=$(find "$RESOURCES/python" \( -name "*.so" -o -name "*.dylib" \) 2>/dev/null | while IFS= read -r sofile; do
+    otool -L "$sofile" 2>/dev/null | grep "/opt/homebrew" | grep -v "Python" | awk '{print $1}' | while IFS= read -r ref; do
+        echo "  ⚠️  $sofile → $ref"
+    done
+done)
+if [ -n "$REMAINING" ]; then
+    echo "$REMAINING"
+    echo "  ⚠️  Some native extensions still reference Homebrew libraries."
+    echo "     These may cause runtime errors on machines without Homebrew."
+    echo "     Consider bundling these libraries or using static linking."
+else
+    echo "  No remaining Homebrew references — bundle is self-contained"
+fi
+
+# Verify all binaries are arm64
+echo "  Verifying architecture..."
+NON_ARM64=$(find "$RESOURCES/python" \( -name "*.so" -o -name "*.dylib" \) -exec file {} \; 2>/dev/null | grep -v "arm64" | head -5)
+if [ -n "$NON_ARM64" ]; then
+    echo "  ⚠️  Found non-arm64 binaries:"
+    echo "$NON_ARM64"
+fi
+
 # ==============================================================================
 # Step 9: Copy backend application code
 # ==============================================================================
@@ -278,25 +308,39 @@ fi
 
 # Sign inner binaries first (inside-out order is required).
 #
-# Python components are signed WITHOUT --options runtime because Hardened
-# Runtime enforces library validation — with ad-hoc signing, the Python
-# binary and dylib get different identities, causing dyld to reject the
-# dylib load ("different Team IDs"). For Developer ID signing, add
-# com.apple.security.cs.disable-library-validation entitlement instead.
+# For ad-hoc signing: Python components are signed WITHOUT --options runtime
+# because Hardened Runtime enforces library validation — with ad-hoc signing,
+# the Python binary and dylib get different identities, causing dyld to reject
+# the dylib load ("different Team IDs").
+#
+# For Developer ID signing: all components get Hardened Runtime + entitlements.
+# The disable-library-validation entitlement allows loading the bundled Python
+# dylib/extensions which have a different code signature.
 
-# 1. Sign the Python dylib (no Hardened Runtime)
-codesign --force --sign "$SIGN_IDENTITY" "$RESOURCES/python/lib/Python" 2>&1
+ENTITLEMENTS="$PROJECT_ROOT/RoninApp/RoninApp/RoninApp.entitlements"
 
-# 2. Sign all .so native extensions (no Hardened Runtime)
+if [ "$SIGN_IDENTITY" != "-" ]; then
+    # Developer ID: use Hardened Runtime + entitlements everywhere
+    PYTHON_SIGN_FLAGS="--force --options runtime --entitlements $ENTITLEMENTS --sign $SIGN_IDENTITY"
+else
+    # Ad-hoc: no Hardened Runtime for Python components
+    PYTHON_SIGN_FLAGS="--force --sign $SIGN_IDENTITY"
+fi
+
+# 1. Sign the Python dylib
+codesign $PYTHON_SIGN_FLAGS "$RESOURCES/python/lib/Python" 2>&1
+
+# 2. Sign all .so native extensions
 find "$RESOURCES/python" -name "*.so" -exec \
-    codesign --force --sign "$SIGN_IDENTITY" {} \; 2>&1
+    codesign $PYTHON_SIGN_FLAGS {} \; 2>&1
 
-# 3. Sign the Python interpreter binary (no Hardened Runtime)
-codesign --force --sign "$SIGN_IDENTITY" \
+# 3. Sign the Python interpreter binary
+codesign $PYTHON_SIGN_FLAGS \
     "$RESOURCES/python/bin/python$PYTHON_VERSION" 2>&1
 
-# 4. Sign the outer app bundle (no --deep to preserve inner signatures)
-codesign --force --options runtime --sign "$SIGN_IDENTITY" "$APP_PATH" 2>&1
+# 4. Sign the outer app bundle (always with Hardened Runtime + entitlements)
+codesign --force --options runtime --entitlements "$ENTITLEMENTS" \
+    --sign "$SIGN_IDENTITY" "$APP_PATH" 2>&1
 
 echo "  Signed ($([ "$SIGN_IDENTITY" = "-" ] && echo "ad-hoc" || echo "Developer ID"))"
 

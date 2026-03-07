@@ -56,6 +56,35 @@ Everything runs locally by default. Audio never leaves your Mac. Choose between 
 
 The Swift app captures mic audio via `AVCaptureSession` (no aggregate device — works alongside Teams, Zoom, WhatsApp without conflicts), streams PCM chunks over WebSocket to the Python backend. The backend runs MLX Whisper for transcription and calls the configured LLM provider for copilot suggestions and summaries.
 
+## System Requirements
+
+### Hardware
+
+| Component | Minimum | Recommended |
+|---|---|---|
+| **Processor** | Apple Silicon M1 | M1 Pro or later |
+| **RAM** | 16 GB | 32 GB (for larger LLM models) |
+| **Disk** | 5 GB free | 10 GB free (model cache + transcripts) |
+| **Network** | None (fully local) | Internet for initial model download |
+
+RONIN runs exclusively on **Apple Silicon** Macs. The MLX Whisper engine uses Metal for GPU-accelerated transcription — Intel Macs are not supported.
+
+### Resource Recommendations
+
+- **16 GB RAM**: Sufficient for Whisper transcription + a 7B parameter LLM (e.g., Qwen 3.5 7B). Expect ~4s response time.
+- **32 GB RAM**: Enables 14B parameter models (e.g., Qwen 3.5 14B) with better suggestion quality. Also allows comfortable multitasking during meetings.
+- **Disk space**: The Whisper model uses ~150 MB. LM Studio models range from 4–10 GB depending on quantization. Transcript logs are lightweight (~1 MB per hour of meeting).
+
+### Software
+
+| Requirement | Version | Purpose |
+|---|---|---|
+| **macOS** | 15.0+ (Sequoia) | SwiftUI features, AVCaptureSession APIs |
+| **Xcode** | 16+ | Build the Swift app (development only) |
+| **Python** | 3.13+ | Backend runtime (3.14 supported) |
+| **LM Studio** | Latest | Local LLM inference (or use OpenAI/Anthropic instead) |
+| **XcodeGen** | Latest | Generates Xcode project from `project.yml` (development only) |
+
 ## Prerequisites
 
 | Requirement | Version | Purpose |
@@ -402,6 +431,54 @@ The audio pipeline:
 ### Audio conflicts with call apps
 - RONIN should work alongside Teams, Zoom, and WhatsApp without issues
 - If you hear audio artifacts, the mic may be switching to an unexpected format — check debug console for "Converter:" log lines
+
+## Building a DMG for Distribution
+
+The `scripts/build-dmg.sh` script creates a self-contained `.dmg` installer that bundles everything needed to run RONIN — no Homebrew, Python, or pip required on the target machine.
+
+### What the DMG includes
+
+- **Swift app** — compiled release binary
+- **Python runtime** — interpreter, stdlib, and dylib from Homebrew, with rpaths rewritten for relocatability
+- **Site-packages** — all pip dependencies from the backend venv (trimmed of test files, pip, setuptools)
+- **Backend code** — FastAPI application source
+- **Whisper model** — pre-downloaded MLX Whisper weights (optional, ~150 MB)
+
+### Build steps
+
+```bash
+# 1. Ensure the backend venv is set up
+cd RONIN/backend
+python3.14 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+
+# 2. (Optional) Pre-download the Whisper model to bundle it
+./scripts/setup.sh
+
+# 3. Build the DMG (ad-hoc signed)
+./scripts/build-dmg.sh
+
+# 4. For distribution: sign with Developer ID and notarize
+export CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+export NOTARY_PROFILE="ronin-notary"   # set up via: xcrun notarytool store-credentials
+./scripts/build-dmg.sh
+```
+
+### Code signing and notarization
+
+| Signing Method | Use Case | Gatekeeper |
+|---|---|---|
+| **Ad-hoc** (`-`) | Local development and testing | Users must right-click → Open on first launch |
+| **Developer ID** | Distribution to other users | Passes Gatekeeper after notarization |
+
+For Developer ID distribution:
+1. The app entitlements include `disable-library-validation` to allow loading the bundled Python dylib
+2. All Python components are signed with Hardened Runtime + entitlements
+3. The DMG is submitted to Apple for notarization via `xcrun notarytool`
+4. The notarization ticket is stapled to the DMG
+
+### Architecture
+
+RONIN is Apple Silicon only (arm64). The build script validates that all bundled binaries are arm64 and warns about any remaining Homebrew references that could cause issues on machines without Homebrew installed.
 
 ## License
 

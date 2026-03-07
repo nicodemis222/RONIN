@@ -7,18 +7,33 @@ BACKEND_DIR="$RONIN_DIR/backend"
 echo "=== Ronin Meeting Copilot Setup ==="
 echo ""
 
-# Check Python
-if ! command -v python3 &> /dev/null; then
-    echo "ERROR: Python 3 is required. Install via: brew install python"
+# Check Python — prefer python3.14, fall back to python3
+PYTHON_CMD=""
+for cmd in python3.14 python3; do
+    if command -v "$cmd" &> /dev/null; then
+        PYTHON_CMD="$cmd"
+        break
+    fi
+done
+if [ -z "$PYTHON_CMD" ]; then
+    echo "ERROR: Python 3 is required. Install via: brew install python@3.14"
     exit 1
 fi
-echo "Python: $(python3 --version)"
+echo "Python: $($PYTHON_CMD --version)"
+
+# Verify minimum version (3.13+)
+PY_MINOR=$($PYTHON_CMD -c "import sys; print(sys.version_info.minor)")
+if [ "$PY_MINOR" -lt 13 ]; then
+    echo "ERROR: Python 3.13+ is required (found $($PYTHON_CMD --version))"
+    echo "Install via: brew install python@3.14"
+    exit 1
+fi
 
 # Create virtual environment
 echo ""
 echo "Setting up Python virtual environment..."
 cd "$BACKEND_DIR"
-python3 -m venv .venv
+$PYTHON_CMD -m venv .venv
 source .venv/bin/activate
 
 # Install dependencies
@@ -40,7 +55,7 @@ with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as f:
         wf.setframerate(16000)
         wf.writeframes(np.zeros(16000, dtype=np.int16).tobytes())
     try:
-        mlx_whisper.transcribe(f.name, path_or_hf_repo='mlx-community/whisper-small.en')
+        mlx_whisper.transcribe(f.name, path_or_hf_repo='mlx-community/whisper-small-mlx')
     except:
         pass
 print('Whisper model ready.')
