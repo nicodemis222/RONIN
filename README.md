@@ -2,7 +2,7 @@
 
 A local-first meeting copilot for macOS. Real-time transcription, AI-powered suggestions, and post-meeting summaries — with four LLM provider options including fully on-device Apple Intelligence.
 
-![Version](https://img.shields.io/badge/version-1.0.0-00FF41)
+![Version](https://img.shields.io/badge/version-1.0.1-00FF41)
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple&logoColor=00FF41)
 ![Swift](https://img.shields.io/badge/Swift-5.10-00FF41?logo=swift&logoColor=00FF41)
 ![Python](https://img.shields.io/badge/Python-3.13%2B-00FF41?logo=python&logoColor=00FF41)
@@ -211,7 +211,7 @@ Click **End Meeting** to generate a structured summary. A progress bar shows the
 - **Action Items** — Tasks with assignees and deadlines (when mentioned)
 - **Open Questions** — Unresolved topics needing follow-up
 
-Export to Markdown or copy to clipboard. The exported Markdown includes the full transcript with speaker labels grouped under speaker headers.
+**Export Full Markdown** saves the summary, decisions, action items, and the complete transcript as a `.md` file. **Copy All to Clipboard** copies everything for pasting into other tools. The exported Markdown includes the full transcript with speaker labels grouped under speaker headers.
 
 > **Safety**: The full transcript is saved to `~/Library/Logs/Ronin/transcripts/` before the LLM is called. Even if summary generation fails, your transcript is preserved. Quitting the app during an active meeting also triggers a graceful save.
 

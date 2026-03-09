@@ -86,16 +86,23 @@ struct PostMeetingView: View {
                                 .matrixGroupBox(title: "OPEN_QUESTIONS")
                             }
 
+                            // Export hint
+                            Text("Export includes summary, decisions, action items, and the full transcript.")
+                                .font(.matrixCaption)
+                                .foregroundColor(.matrixFaded)
+
                             HStack(spacing: 12) {
-                                Button("Export to Markdown") {
+                                Button("Export Full Markdown") {
                                     viewModel.exportMarkdown()
                                 }
                                 .buttonStyle(MatrixPrimaryButtonStyle())
+                                .help("Save summary + full transcript as a Markdown file")
 
-                                Button("Copy Summary") {
+                                Button("Copy All to Clipboard") {
                                     viewModel.copyToClipboard()
                                 }
                                 .buttonStyle(MatrixSecondaryButtonStyle())
+                                .help("Copy summary + full transcript to clipboard")
 
                                 Spacer()
 

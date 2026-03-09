@@ -337,7 +337,10 @@ class LiveCopilotViewModel: ObservableObject {
         isCompact.toggle()
     }
 
-    /// Reset transient state for a new meeting (keeps persisted prefs)
+    /// Reset transient state for a new meeting (keeps persisted prefs).
+    /// Note: `meetingConfig` and `accumulatedNotes` are preserved — they are
+    /// set by MeetingPrepView before the phase transition to `.live` and must
+    /// survive the reset that happens in LiveCopilotView's `.onAppear`.
     func resetForNewMeeting() {
         hasEnded = false
         transcriptSegments = []
@@ -362,8 +365,6 @@ class LiveCopilotViewModel: ObservableObject {
         showEndConfirmation = false
         nativeCopilotService?.reset()
         nativeCopilotService = nil
-        meetingConfig = nil
-        accumulatedNotes = ""
     }
 
     // MARK: - Question Highlight
