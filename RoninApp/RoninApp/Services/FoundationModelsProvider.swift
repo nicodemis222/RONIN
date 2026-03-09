@@ -27,7 +27,7 @@ final class FoundationModelsProvider: @unchecked Sendable {
     """
 
     private static let summaryInstructions = """
-    Summarize this meeting transcript. Provide an executive summary (3-5 sentences), all key decisions with context, all action items with assignee and deadline if mentioned (empty string otherwise), and all unresolved questions or open issues.
+    You are an expert meeting analyst. Summarize this transcript thoroughly. Provide: executive summary (5-8 sentences covering topics, outcomes, direction), ALL key decisions (explicit agreements, approvals, scheduling, prioritization — include context for each), ALL action items (assignments, volunteered tasks, follow-ups, requests for info — include assignee name/role and deadline if mentioned, empty string otherwise), and ALL unresolved questions or deferred topics. Read between the lines — heavy dialogue contains implicit decisions and action items. A typical meeting has 5-15 action items and 3-8 decisions. Do NOT under-extract.
     """
 
     // MARK: - Copilot Response

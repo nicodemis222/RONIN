@@ -143,13 +143,14 @@ struct TranscriptPanelView: View {
                     Spacer().frame(width: 26)
                 }
 
-                // Transcript text — optimized for scanning
-                Text(segment.text)
-                    .font(.matrixTranscript)
-                    .foregroundColor(.matrixReadable)
-                    .lineSpacing(MatrixSpacing.transcriptLineSpacing)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // Transcript text — streams in character-by-character
+                StreamingText(
+                    text: segment.text,
+                    isFinal: segment.isFinal,
+                    font: .matrixTranscript,
+                    foregroundColor: .matrixReadable,
+                    lineSpacing: MatrixSpacing.transcriptLineSpacing
+                )
             }
         }
         // Cyan left accent bar on question segments for visual linking

@@ -14,6 +14,7 @@
 		3E547DE4D05D7E05664F1C17 /* MeetingPrepViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F53840D763C572F1CE6F44E /* MeetingPrepViewModel.swift */; };
 		3E7902CD28648642F46E07DE /* BackendProcessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E03A460F6D7580C31F772 /* BackendProcessService.swift */; };
 		414C5302E875BD8FD849D987 /* TranscriptSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB82727556978B74FA8E320 /* TranscriptSegment.swift */; };
+		4C6BEAAAD2B052CAF6D2E3F1 /* StreamingText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 417C251A315BC92ECD7AE912 /* StreamingText.swift */; };
 		53212ACF6146600C8AAF19B8 /* WebSocketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A522918D7D8323982D65C2EF /* WebSocketService.swift */; };
 		53C790261AD872E1403EA7EA /* PostMeetingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8CC354836B3377DD3ABC62B /* PostMeetingView.swift */; };
 		5BF79586ABE5AF8889A5CCBA /* TutorialViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DF937F71DFE20CE1B0B1141 /* TutorialViewModel.swift */; };
@@ -67,6 +68,7 @@
 		2DF937F71DFE20CE1B0B1141 /* TutorialViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialViewModel.swift; sourceTree = "<group>"; };
 		2F53840D763C572F1CE6F44E /* MeetingPrepViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPrepViewModel.swift; sourceTree = "<group>"; };
 		3BC020DC797F02CAA1824505 /* LiveCopilotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCopilotView.swift; sourceTree = "<group>"; };
+		417C251A315BC92ECD7AE912 /* StreamingText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingText.swift; sourceTree = "<group>"; };
 		46EC7D9E1E5DF712F4345FE3 /* LiveCopilotViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCopilotViewModelTests.swift; sourceTree = "<group>"; };
 		4B1F65F903CAE56480DEBB15 /* PostMeetingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostMeetingViewModel.swift; sourceTree = "<group>"; };
 		4BDC265406018BA91A0ECAAF /* CopilotSuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotSuggestion.swift; sourceTree = "<group>"; };
@@ -124,6 +126,7 @@
 				8C9CEB52040B3388C888ED4E /* MeetingPrepView.swift */,
 				A8CC354836B3377DD3ABC62B /* PostMeetingView.swift */,
 				2BCB53E5D29D3B545B525F80 /* SettingsView.swift */,
+				417C251A315BC92ECD7AE912 /* StreamingText.swift */,
 				DED54725DB0D8369981CA6ED /* SuggestionsPanelView.swift */,
 				1CA978C1C47D7D804FDE01F8 /* TranscriptPanelView.swift */,
 				B4A9459E72CB5C2A5FE5F457 /* TutorialOverlayView.swift */,
@@ -309,6 +312,7 @@
 				8B7FE96BABD85F0D4593D1EC /* PostMeetingViewModel.swift in Sources */,
 				932C4FC6A5986934346B26BC /* RoninApp.swift in Sources */,
 				A70148A6C0099123DF0EDB38 /* SettingsView.swift in Sources */,
+				4C6BEAAAD2B052CAF6D2E3F1 /* StreamingText.swift in Sources */,
 				851DADA34A01B24AF96F5FE1 /* SuggestionsPanelView.swift in Sources */,
 				DE4A2619ADF62B5D44562E0F /* TranscriptPanelView.swift in Sources */,
 				414C5302E875BD8FD849D987 /* TranscriptSegment.swift in Sources */,

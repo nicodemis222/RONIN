@@ -193,6 +193,66 @@ struct MatrixGroupBox: ViewModifier {
     }
 }
 
+/// A group box variant where the content scrolls when it exceeds maxHeight.
+/// The title/header stays pinned and a subtle fade + scroll indicator appear.
+struct ScrollableMatrixGroupBox: ViewModifier {
+    let title: String
+    let maxHeight: CGFloat
+    @State private var contentOverflows = false
+
+    func body(content: Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Pinned header
+            HStack {
+                Text("> \(title)")
+                    .font(.matrixHeadline)
+                    .foregroundColor(.matrixBright)
+                    .modifier(MatrixGlowText(radius: 4))
+                Spacer()
+                if contentOverflows {
+                    Text("scroll ↕")
+                        .font(.matrixCaption)
+                        .foregroundColor(.matrixFaded)
+                }
+            }
+
+            Divider().overlay(Color.matrixDivider)
+
+            // Scrollable content area
+            ScrollView {
+                content
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: ContentHeightKey.self,
+                                value: geo.size.height
+                            )
+                        }
+                    )
+            }
+            .frame(maxHeight: maxHeight)
+            .onPreferenceChange(ContentHeightKey.self) { height in
+                contentOverflows = height > maxHeight
+            }
+        }
+        .padding(12)
+        .background(Color.matrixElevated)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.matrixBorder.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+/// Preference key for measuring content height inside scrollable tiles
+private struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 /// Cosmetic scanline overlay
 struct MatrixScanlines: ViewModifier {
     func body(content: Content) -> some View {
@@ -261,6 +321,10 @@ extension View {
 
     func matrixGroupBox(title: String) -> some View {
         modifier(MatrixGroupBox(title: title))
+    }
+
+    func scrollableGroupBox(title: String, maxHeight: CGFloat = 250) -> some View {
+        modifier(ScrollableMatrixGroupBox(title: title, maxHeight: maxHeight))
     }
 
     /// Apply pulsing cyan glow when a question is detected in the transcript

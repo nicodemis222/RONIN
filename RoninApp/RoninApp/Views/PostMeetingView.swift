@@ -19,71 +19,90 @@ struct PostMeetingView: View {
                                 .foregroundColor(.matrixNeon)
                                 .matrixGlow(radius: 8)
 
-                            // Executive Summary
+                            // Executive Summary — scrollable tile
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(summary.executive_summary)
                                     .font(.matrixBody)
                                     .foregroundColor(.matrixText)
                                     .textSelection(.enabled)
                             }
-                            .matrixGroupBox(title: "EXECUTIVE_SUMMARY")
+                            .scrollableGroupBox(title: "EXECUTIVE_SUMMARY", maxHeight: 200)
 
                             if !summary.decisions.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
+                                // Key Decisions — scrollable tile
+                                VStack(alignment: .leading, spacing: 10) {
                                     ForEach(summary.decisions) { d in
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(d.decision)
-                                                .font(.matrixBodyBold)
-                                                .foregroundColor(.matrixText)
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack(alignment: .top, spacing: 6) {
+                                                Image(systemName: "checkmark.seal.fill")
+                                                    .font(.matrixCaption)
+                                                    .foregroundColor(.matrixNeon)
+                                                    .padding(.top, 2)
+                                                Text(d.decision)
+                                                    .font(.matrixBodyBold)
+                                                    .foregroundColor(.matrixText)
+                                            }
                                             Text(d.context)
                                                 .font(.matrixCaption)
                                                 .foregroundColor(.matrixDim)
+                                                .padding(.leading, 22)
                                         }
+                                        .textSelection(.enabled)
                                     }
                                 }
-                                .matrixGroupBox(title: "KEY_DECISIONS")
+                                .scrollableGroupBox(title: "KEY_DECISIONS (\(summary.decisions.count))", maxHeight: 280)
                             }
 
                             if !summary.action_items.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
+                                // Action Items — scrollable tile
+                                VStack(alignment: .leading, spacing: 10) {
                                     ForEach(summary.action_items) { item in
-                                        HStack(alignment: .top) {
+                                        HStack(alignment: .top, spacing: 6) {
                                             Image(systemName: "circle")
-                                                .font(.matrixCaption)
-                                                .foregroundColor(.matrixDim)
-                                                .padding(.top, 3)
-                                            VStack(alignment: .leading, spacing: 2) {
+                                                .font(.system(size: 8))
+                                                .foregroundColor(.matrixCyan)
+                                                .padding(.top, 5)
+                                            VStack(alignment: .leading, spacing: 3) {
                                                 Text(item.action)
                                                     .font(.matrixBody)
                                                     .foregroundColor(.matrixText)
-                                                HStack(spacing: 8) {
+                                                HStack(spacing: 10) {
                                                     if !item.assignee.isEmpty {
-                                                        Label(item.assignee, systemImage: "person")
+                                                        Label(item.assignee, systemImage: "person.fill")
                                                             .font(.matrixCaption)
                                                             .foregroundColor(.matrixFaded)
                                                     }
                                                     if !item.deadline.isEmpty {
                                                         Label(item.deadline, systemImage: "calendar")
                                                             .font(.matrixCaption)
-                                                            .foregroundColor(.matrixFaded)
+                                                            .foregroundColor(.matrixWarning)
                                                     }
                                                 }
                                             }
                                         }
+                                        .textSelection(.enabled)
                                     }
                                 }
-                                .matrixGroupBox(title: "ACTION_ITEMS")
+                                .scrollableGroupBox(title: "ACTION_ITEMS (\(summary.action_items.count))", maxHeight: 300)
                             }
 
                             if !summary.unresolved.isEmpty {
-                                VStack(alignment: .leading, spacing: 4) {
+                                // Open Questions — scrollable tile
+                                VStack(alignment: .leading, spacing: 8) {
                                     ForEach(summary.unresolved, id: \.self) { q in
-                                        Label(q, systemImage: "questionmark.circle")
-                                            .font(.matrixBody)
-                                            .foregroundColor(.matrixCyan)
+                                        HStack(alignment: .top, spacing: 6) {
+                                            Image(systemName: "questionmark.circle")
+                                                .font(.matrixCaption)
+                                                .foregroundColor(.matrixCyan)
+                                                .padding(.top, 2)
+                                            Text(q)
+                                                .font(.matrixBody)
+                                                .foregroundColor(.matrixCyan)
+                                        }
+                                        .textSelection(.enabled)
                                     }
                                 }
-                                .matrixGroupBox(title: "OPEN_QUESTIONS")
+                                .scrollableGroupBox(title: "OPEN_QUESTIONS (\(summary.unresolved.count))", maxHeight: 220)
                             }
 
                             // Export hint

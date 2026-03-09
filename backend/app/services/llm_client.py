@@ -333,7 +333,7 @@ class LLMClient:
             )
             try:
                 content = await self.provider.chat_completion(
-                    messages, temperature=0.3, max_tokens=2000
+                    messages, temperature=0.3, max_tokens=4000
                 )
                 data = _extract_json(content)
                 data = _normalize_summary(data)
