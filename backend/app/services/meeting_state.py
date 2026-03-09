@@ -19,15 +19,18 @@ class MeetingSession:
     def append_transcript(self, segment: TranscriptSegment):
         """Append or replace a transcript segment.
 
-        When the previous segment is a partial (non-final) from the same
-        speaker, replace it — this gives the streaming word-by-word effect.
-        When the new segment is final (or from a different speaker), it
+        When the previous segment is a partial (non-final), ALWAYS replace
+        it — regardless of speaker label. Speaker identification is
+        non-deterministic (sometimes "", sometimes "Speaker N" for the same
+        audio), so checking speaker match caused partials to leak into the
+        transcript as duplicate lines.
+
+        When the previous segment is final and a new segment arrives, it
         starts a new line in the transcript.
         """
         if (
             self.transcript_segments
             and not self.transcript_segments[-1].is_final
-            and self.transcript_segments[-1].speaker == segment.speaker
         ):
             # Replace previous partial with updated (or final) version
             self.transcript_segments[-1] = segment
@@ -41,7 +44,18 @@ class MeetingSession:
 
     @property
     def full_transcript(self) -> str:
-        return "\n".join(self._format_segment(s) for s in self.transcript_segments)
+        """Return only final (committed) segments for export.
+
+        Partials are transient display-only data that get superseded by
+        the next partial or final. Including them in the export would
+        create massive duplication (the same utterance growing line by line).
+        The last segment is included even if partial (in-progress speech).
+        """
+        finals = [
+            s for i, s in enumerate(self.transcript_segments)
+            if s.is_final or i == len(self.transcript_segments) - 1
+        ]
+        return "\n".join(self._format_segment(s) for s in finals)
 
     def get_recent_transcript(self, minutes: float | None = None) -> str:
         if not self.transcript_segments:

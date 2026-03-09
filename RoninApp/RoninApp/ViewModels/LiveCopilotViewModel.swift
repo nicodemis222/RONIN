@@ -214,18 +214,21 @@ class LiveCopilotViewModel: ObservableObject {
         case .transcriptUpdate(let segment):
             addDebug("📝 Transcript (\(segment.isFinal ? "final" : "partial")): \"\(segment.text.prefix(60))\"")
 
-            // Streaming transcript: partial segments replace the previous
-            // partial for the same speaker (text grows in-place). Final
-            // segments commit the utterance and start a new line.
+            // Streaming transcript: partial segments ALWAYS replace the
+            // previous partial (text grows in-place). Speaker check is
+            // intentionally removed — speaker identification is non-
+            // deterministic (sometimes "", sometimes "Speaker N" for
+            // the same audio), so requiring a match caused partials to
+            // leak as duplicate lines. Final segments commit the
+            // utterance and start a new line.
             if let lastIndex = transcriptSegments.indices.last,
-               !transcriptSegments[lastIndex].isFinal,
-               transcriptSegments[lastIndex].speaker == segment.speaker {
+               !transcriptSegments[lastIndex].isFinal {
                 // Replace in-place, preserving original id + timestamp for SwiftUI stability
                 transcriptSegments[lastIndex] = TranscriptSegment(
                     id: transcriptSegments[lastIndex].id,
                     text: segment.text,
                     timestamp: transcriptSegments[lastIndex].timestamp,
-                    speaker: segment.speaker,
+                    speaker: segment.speaker.isEmpty ? transcriptSegments[lastIndex].speaker : segment.speaker,
                     isFinal: segment.isFinal
                 )
             } else {

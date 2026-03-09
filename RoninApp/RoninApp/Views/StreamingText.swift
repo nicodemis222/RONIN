@@ -1,8 +1,12 @@
 import SwiftUI
 
 /// A text view that reveals new characters with a fast typewriter effect.
+///
 /// When `text` changes, any new suffix beyond what was already displayed
 /// is revealed character-by-character. Already-visible text stays put.
+///
+/// Uses SwiftUI's `.task(id:)` for lifecycle-safe async animation —
+/// no raw Timers that break in LazyVStack recycling.
 struct StreamingText: View {
     let text: String
     let isFinal: Bool
@@ -12,88 +16,95 @@ struct StreamingText: View {
 
     /// How many characters are currently visible
     @State private var visibleCount: Int = 0
+    /// Monotonically increasing revision counter to trigger .task(id:)
+    @State private var revision: Int = 0
     /// The text we're animating towards
     @State private var targetText: String = ""
-    /// Timer driving the reveal
-    @State private var timer: Timer?
+    /// Whether this view has appeared at least once
+    @State private var hasAppeared: Bool = false
 
     /// Characters per second for the typewriter effect
-    private let charsPerSecond: Double = 120
+    private static let charsPerSecond: Double = 160
+    /// Nanoseconds between each character reveal
+    private static let tickNanos: UInt64 = UInt64(1_000_000_000 / charsPerSecond)
 
     var body: some View {
-        Text(String(targetText.prefix(visibleCount)))
+        Text(displayText)
             .font(font)
             .foregroundColor(foregroundColor)
             .lineSpacing(lineSpacing)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .onChange(of: text) { oldValue, newValue in
-                revealDelta(from: oldValue, to: newValue)
-            }
             .onAppear {
-                // First appearance — if text already has content, reveal it
                 targetText = text
-                if isFinal {
-                    // Final segments show instantly (already committed speech)
+                if isFinal || hasAppeared {
+                    // Final segments or re-appearing views: show all text instantly
                     visibleCount = text.count
                 } else {
-                    // Partial — animate from nothing
+                    hasAppeared = true
                     visibleCount = 0
-                    startTimer()
+                    revision += 1
                 }
             }
-            .onDisappear {
-                timer?.invalidate()
-                timer = nil
+            .onChange(of: text) { oldValue, newValue in
+                handleTextChange(from: oldValue, to: newValue)
+            }
+            .task(id: revision) {
+                await animateReveal()
             }
     }
 
-    private func revealDelta(from oldValue: String, to newValue: String) {
-        timer?.invalidate()
-        timer = nil
+    /// The visible portion of the target text
+    private var displayText: String {
+        if visibleCount >= targetText.count {
+            return targetText
+        }
+        return String(targetText.prefix(visibleCount))
+    }
 
+    private func handleTextChange(from oldValue: String, to newValue: String) {
         let previousVisible = visibleCount
         targetText = newValue
 
-        if newValue.hasPrefix(String(oldValue.prefix(previousVisible))) {
-            // New text extends what's visible — keep visible prefix, animate the rest
-            // visibleCount stays the same, timer will reveal the new chars
+        // Check if the new text extends what's already visible
+        let oldVisible = String(oldValue.prefix(previousVisible))
+        if newValue.hasPrefix(oldVisible) {
+            // New text grows from what's visible — keep visibleCount, animate the rest
         } else {
-            // Text changed entirely (new segment) — show what we can match
-            let commonLen = commonPrefixLength(String(targetText.prefix(previousVisible)), newValue)
-            visibleCount = commonLen
+            // Text changed in a non-extending way — snap to common prefix
+            visibleCount = Self.commonPrefixCount(oldVisible, newValue)
         }
 
         if visibleCount < targetText.count {
-            startTimer()
+            revision += 1
         }
     }
 
-    private func startTimer() {
-        timer?.invalidate()
-        let interval = 1.0 / charsPerSecond
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-            Task { @MainActor in
-                if visibleCount < targetText.count {
-                    // Reveal in small bursts for smoother feel
-                    let remaining = targetText.count - visibleCount
-                    let burst = min(remaining, max(1, remaining / 8))
-                    visibleCount += burst
-                } else {
-                    timer?.invalidate()
-                    timer = nil
-                }
+    /// Async reveal loop — cancels automatically when revision changes or view disappears
+    private func animateReveal() async {
+        while visibleCount < targetText.count {
+            // Reveal in small bursts for natural word-level pacing
+            let remaining = targetText.count - visibleCount
+            let burst = max(1, min(remaining, remaining / 6 + 1))
+            visibleCount += burst
+
+            do {
+                try await Task.sleep(nanoseconds: Self.tickNanos * UInt64(burst))
+            } catch {
+                // Task cancelled (view disappeared or new revision)
+                return
             }
         }
     }
 
-    private func commonPrefixLength(_ a: String, _ b: String) -> Int {
+    private static func commonPrefixCount(_ a: String, _ b: String) -> Int {
         var count = 0
-        let aChars = Array(a)
-        let bChars = Array(b)
-        let limit = min(aChars.count, bChars.count)
-        while count < limit && aChars[count] == bChars[count] {
+        var aIdx = a.startIndex
+        var bIdx = b.startIndex
+        while aIdx < a.endIndex && bIdx < b.endIndex && a[aIdx] == b[bIdx] {
             count += 1
+            aIdx = a.index(after: aIdx)
+            bIdx = b.index(after: bIdx)
         }
         return count
     }
