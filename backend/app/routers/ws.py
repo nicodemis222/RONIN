@@ -135,6 +135,7 @@ async def audio_websocket(websocket: WebSocket):
                     full_text=transcript_result["full_text"],
                     timestamp=transcript_result["timestamp"],
                     speaker=speaker,
+                    is_final=transcript_result.get("is_final", True),
                 )
 
                 await websocket.send_json(

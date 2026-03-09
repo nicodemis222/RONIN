@@ -2,7 +2,7 @@
 
 A local-first meeting copilot for macOS. Real-time transcription, AI-powered suggestions, and post-meeting summaries — with four LLM provider options including fully on-device Apple Intelligence.
 
-![Version](https://img.shields.io/badge/version-1.0.1-00FF41)
+![Version](https://img.shields.io/badge/version-1.1.0-00FF41)
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple&logoColor=00FF41)
 ![Swift](https://img.shields.io/badge/Swift-5.10-00FF41?logo=swift&logoColor=00FF41)
 ![Python](https://img.shields.io/badge/Python-3.13%2B-00FF41?logo=python&logoColor=00FF41)
@@ -188,7 +188,7 @@ RONIN opens a resizable floating overlay window with three panels. Drag the divi
 
 | Panel | Content |
 |---|---|
-| **Transcript** | Real-time speech-to-text with timestamps |
+| **Transcript** | Streaming speech-to-text — text grows word-by-word as each person speaks, then locks in when they pause. No duplication. |
 | **Responses** | 2-3 tone-varied suggested replies you can copy with one click. All responses are preserved as scrollable history — newest at the bottom with auto-scroll, older responses above with timestamp separators. |
 | **Guidance** | Follow-up questions, risk alerts, and relevant facts from your notes. Full history preserved with the same auto-scroll behavior as Responses. |
 

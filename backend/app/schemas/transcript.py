@@ -6,6 +6,7 @@ class TranscriptSegment(BaseModel):
     full_text: str
     timestamp: str
     speaker: str = ""
+    is_final: bool = True
 
 
 class TranscriptUpdate(BaseModel):

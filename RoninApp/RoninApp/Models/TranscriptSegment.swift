@@ -3,19 +3,22 @@ import SwiftUI
 
 struct TranscriptSegment: Identifiable, Codable {
     let id: UUID
-    let text: String
+    var text: String
     let timestamp: String
     let speaker: String
+    let isFinal: Bool
 
-    init(id: UUID = UUID(), text: String, timestamp: String, speaker: String = "") {
+    init(id: UUID = UUID(), text: String, timestamp: String, speaker: String = "", isFinal: Bool = true) {
         self.id = id
         self.text = text
         self.timestamp = timestamp
         self.speaker = speaker
+        self.isFinal = isFinal
     }
 
     enum CodingKeys: String, CodingKey {
         case text, timestamp, speaker
+        case isFinal = "is_final"
     }
 
     init(from decoder: Decoder) throws {
@@ -24,6 +27,7 @@ struct TranscriptSegment: Identifiable, Codable {
         self.text = try container.decode(String.self, forKey: .text)
         self.timestamp = try container.decode(String.self, forKey: .timestamp)
         self.speaker = (try? container.decode(String.self, forKey: .speaker)) ?? ""
+        self.isFinal = (try? container.decode(Bool.self, forKey: .isFinal)) ?? true
     }
 
     /// Consistent color for each speaker label

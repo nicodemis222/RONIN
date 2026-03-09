@@ -103,11 +103,25 @@ class TranscriptionService:
             logger.info("Transcription returned no result (model error or no new text)")
             return None
 
-        logger.info(f"Transcription result: {len(result['text'])} chars, speaker={result.get('speaker', '')}")
+        # Tag segment as final (speech boundary) or partial (mid-speech update).
+        # Partials replace the previous partial in the UI for a streaming effect;
+        # finals commit the utterance and reset the buffer for the next one.
+        result["is_final"] = is_boundary
+
+        logger.info(
+            f"Transcription result: {len(result['text'])} chars, "
+            f"speaker={result.get('speaker', '')}, "
+            f"{'final' if is_boundary else 'partial'}"
+        )
 
         if is_boundary:
             self.speech_active = False
             self.silence_count = 0
+            # Reset buffer so the next transcription starts fresh.
+            # This eliminates redundancy: Whisper no longer re-transcribes
+            # audio that has already been committed as a final segment.
+            self.audio_buffer = np.array([], dtype=np.int16)
+            self.previous_text = ""
 
         return result
 
@@ -145,16 +159,17 @@ class TranscriptionService:
         if new_text == self.previous_text:
             return None
 
+        # Check if there is genuinely new content (not just punctuation drift)
         delta = self._extract_delta(self.previous_text, new_text)
-        self.previous_text = new_text
-
         if not delta.strip():
             return None
 
-        # Final check: reject hallucinated repetition in the delta itself
+        # Reject hallucinated repetition in the new content
         if self._is_repetitive(delta):
             logger.info("Rejected repetitive hallucination in delta")
             return None
+
+        self.previous_text = new_text
 
         # Identify speaker from recent speech audio
         speaker = ""
@@ -166,8 +181,12 @@ class TranscriptionService:
             # gets a fresh fingerprint
             self._recent_speech_audio = np.array([], dtype=np.int16)
 
+        # Return the full utterance text (not the delta). The UI replaces
+        # the previous partial segment in-place, creating a streaming effect
+        # where text grows word-by-word. Only finals get persisted to the
+        # transcript, so the exported file has each utterance exactly once.
         return {
-            "text": delta,
+            "text": new_text,
             "full_text": new_text,
             "timestamp": time.strftime("%H:%M:%S"),
             "speaker": speaker,

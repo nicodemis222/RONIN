@@ -17,7 +17,22 @@ class MeetingSession:
     started_at: datetime = field(default_factory=datetime.now)
 
     def append_transcript(self, segment: TranscriptSegment):
-        self.transcript_segments.append(segment)
+        """Append or replace a transcript segment.
+
+        When the previous segment is a partial (non-final) from the same
+        speaker, replace it — this gives the streaming word-by-word effect.
+        When the new segment is final (or from a different speaker), it
+        starts a new line in the transcript.
+        """
+        if (
+            self.transcript_segments
+            and not self.transcript_segments[-1].is_final
+            and self.transcript_segments[-1].speaker == segment.speaker
+        ):
+            # Replace previous partial with updated (or final) version
+            self.transcript_segments[-1] = segment
+        else:
+            self.transcript_segments.append(segment)
 
     @staticmethod
     def _format_segment(s) -> str:
