@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct MeetingPrepView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var backendService: BackendProcessService
+    @EnvironmentObject var copilotVM: LiveCopilotViewModel
     @EnvironmentObject var tutorialVM: TutorialViewModel
     @StateObject private var viewModel = MeetingPrepViewModel()
     @State private var isTargeted = false
@@ -174,6 +175,16 @@ struct MeetingPrepView: View {
                 // Start Button
                 Button(action: {
                     Task {
+                        // Save meeting config for native copilot before clearing prep data
+                        let config = MeetingConfig(
+                            title: viewModel.title,
+                            goal: viewModel.goal,
+                            constraints: viewModel.constraints,
+                            notes: viewModel.noteFiles
+                        )
+                        copilotVM.meetingConfig = config
+                        copilotVM.accumulatedNotes = viewModel.noteFiles.map { $0.content }.joined(separator: "\n")
+
                         if let response = await viewModel.startMeeting() {
                             appState.sessionId = response.session_id
                             appState.meetingTitle = viewModel.title
@@ -236,7 +247,8 @@ struct MeetingPrepView: View {
                     .foregroundColor(.matrixFaded)
                 Text(provider.shortLabel)
                     .font(.matrixCaption)
-                    .foregroundColor(provider.isCloud ? .matrixWarning : .matrixNeon)
+                    .foregroundColor(provider.isAppleIntelligence ? .matrixCyan
+                                     : provider.isCloud ? .matrixWarning : .matrixNeon)
                     .matrixGlow(radius: 2)
             case .failed(let msg):
                 Circle()

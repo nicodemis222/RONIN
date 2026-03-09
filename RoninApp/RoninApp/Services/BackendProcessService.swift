@@ -183,8 +183,15 @@ class BackendProcessService: ObservableObject {
 
         // LLM provider settings from UserDefaults + Keychain
         let llmProvider = UserDefaults.standard.string(forKey: "ronin.llm.provider") ?? "local"
-        env["LLM_PROVIDER"] = llmProvider
-        appendLog("[RONIN] LLM provider: \(llmProvider)")
+
+        // Apple Intelligence runs copilot natively in Swift — backend runs in transcription-only mode
+        if llmProvider == "apple_intelligence" {
+            env["LLM_PROVIDER"] = "none"
+            appendLog("[RONIN] LLM provider: Apple Intelligence (backend in transcription-only mode)")
+        } else {
+            env["LLM_PROVIDER"] = llmProvider
+            appendLog("[RONIN] LLM provider: \(llmProvider)")
+        }
 
         let llmModel = UserDefaults.standard.string(forKey: "ronin.llm.model") ?? ""
         if !llmModel.isEmpty {
@@ -195,9 +202,13 @@ class BackendProcessService: ObservableObject {
             ?? "http://localhost:1234/v1"
         env["LM_STUDIO_URL"] = localURL
 
-        // API key from Keychain (never stored in UserDefaults)
+        // API keys from Keychain (never stored in UserDefaults)
         if let openaiKey = KeychainHelper.load(key: "ronin.openai-api-key"), !openaiKey.isEmpty {
             env["OPENAI_API_KEY"] = openaiKey
+        }
+
+        if let anthropicKey = KeychainHelper.load(key: "ronin.anthropic-api-key"), !anthropicKey.isEmpty {
+            env["ANTHROPIC_API_KEY"] = anthropicKey
         }
 
         proc.environment = env
@@ -480,7 +491,17 @@ class BackendProcessService: ObservableObject {
         }
 
         // LLM
-        if let llm = details.dependencies["llm"] {
+        let selectedProvider = UserDefaults.standard.string(forKey: "ronin.llm.provider") ?? "local"
+        if selectedProvider == "apple_intelligence" {
+            // Apple Intelligence is handled natively in Swift, not by the backend
+            if FoundationModelsAvailability.isAvailable {
+                updateDependency(.llmProvider(.passed, detail: "Apple Intelligence"))
+                appendLog("[RONIN] LLM: Apple Intelligence (on-device)")
+            } else {
+                updateDependency(.llmProvider(.failed("Apple Intelligence not available on this device"), detail: "Apple Intelligence"))
+                appendLog("[RONIN] LLM: Apple Intelligence not available")
+            }
+        } else if let llm = details.dependencies["llm"] {
             let provider = llm.provider ?? "unknown"
             if llm.status == "ok" || llm.status == "connected" {
                 let detail = llm.model ?? provider

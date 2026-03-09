@@ -44,8 +44,8 @@ build/
 # Logs
 *.log
 
-# Models (large binary files)
-models/
+# ML models (large binary files — top-level only)
+/models/
 
 # Environment
 .env

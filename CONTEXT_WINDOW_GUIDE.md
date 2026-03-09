@@ -1,5 +1,7 @@
 # RONIN — Context Window Guide
 
+> **Note**: This guide applies to the **Local (LM Studio)** provider. If you're using **Apple Intelligence**, context is managed automatically with a ~4K token window and built-in retry logic. **OpenAI** and **Anthropic** cloud providers have large context windows (128K+) and rarely need tuning.
+
 ## The Problem
 
 LM Studio defaults to `n_ctx = 4096` tokens. A 1-hour meeting generates ~9,000 words (~12,000 tokens) of transcript alone. Adding the system prompt, notes, and output tokens pushes the total to ~15,000+ tokens — far exceeding the default context window. This causes HTTP 400 errors (`n_keep >= n_ctx`) and blank copilot responses.

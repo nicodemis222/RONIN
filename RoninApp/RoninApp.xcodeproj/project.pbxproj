@@ -40,6 +40,9 @@
 		EFA6FF14B9EA87D684D13997 /* MeetingSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EB9B7EFD51244186FECB7A9 /* MeetingSummary.swift */; };
 		F7D1C20AA73C6D5C43F5EFBF /* MeetingPrepViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB50DCB2CA2AD3A795DE02E8 /* MeetingPrepViewModelTests.swift */; };
 		FF77971CE99D30D0E1A630C5 /* TutorialViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86DC7E33274051DC61DD1E94 /* TutorialViewModelTests.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* GenerableTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6071829304142 /* GenerableTypes.swift */; };
+		B2C3D4E5F6071829304A5B6C /* FoundationModelsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F3A4B5C6D7081930415263 /* FoundationModelsProvider.swift */; };
+		C3D4E5F60718293A4B5C6D7E /* NativeCopilotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E4F5A6B7C8091A40516273 /* NativeCopilotService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -90,6 +93,9 @@
 		DED54725DB0D8369981CA6ED /* SuggestionsPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionsPanelView.swift; sourceTree = "<group>"; };
 		F121910AD733D95952F7DF22 /* RoninApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RoninApp.entitlements; sourceTree = "<group>"; };
 		F95FCA99848C17A811251A93 /* GuidancePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidancePanelView.swift; sourceTree = "<group>"; };
+		D3E4F5A6B7C8091A40516273 /* NativeCopilotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCopilotService.swift; sourceTree = "<group>"; };
+		E2F3A4B5C6D7081930415263 /* FoundationModelsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsProvider.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6071829304142 /* GenerableTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerableTypes.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -98,6 +104,7 @@
 			children = (
 				4BDC265406018BA91A0ECAAF /* CopilotSuggestion.swift */,
 				14FC143F5D331B3DF1E55DCE /* DependencyStatus.swift */,
+				F1A2B3C4D5E6071829304142 /* GenerableTypes.swift */,
 				66B2EDB8DE3984AD213B2C8F /* MeetingConfig.swift */,
 				6EB9B7EFD51244186FECB7A9 /* MeetingSummary.swift */,
 				2BB82727556978B74FA8E320 /* TranscriptSegment.swift */,
@@ -186,7 +193,9 @@
 				840D0690A21819FC72A5E594 /* AudioCaptureService.swift */,
 				7BF44401107069585A787181 /* BackendAPIService.swift */,
 				8B3E03A460F6D7580C31F772 /* BackendProcessService.swift */,
+				E2F3A4B5C6D7081930415263 /* FoundationModelsProvider.swift */,
 				D0B9E5C6EE415A89DCD29486 /* KeychainHelper.swift */,
+				D3E4F5A6B7C8091A40516273 /* NativeCopilotService.swift */,
 				A522918D7D8323982D65C2EF /* WebSocketService.swift */,
 			);
 			path = Services;
@@ -283,6 +292,8 @@
 				93AB979081DC47A22BDA8575 /* CopilotSuggestion.swift in Sources */,
 				8578A1B043C0F128CE4D107D /* DependencyChecklistView.swift in Sources */,
 				A4913291F041A58DC6C13647 /* DependencyStatus.swift in Sources */,
+				B2C3D4E5F6071829304A5B6C /* FoundationModelsProvider.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* GenerableTypes.swift in Sources */,
 				5FF2B4B22A930438DA1A5D60 /* GuidancePanelView.swift in Sources */,
 				EA864E08DD868EB28E8A1949 /* KeychainHelper.swift in Sources */,
 				66600344DC5CBB6F8AF823DA /* LLMSettingsViewModel.swift in Sources */,
@@ -293,6 +304,7 @@
 				6297BA54A9A4F735E05BA0DE /* MeetingPrepView.swift in Sources */,
 				3E547DE4D05D7E05664F1C17 /* MeetingPrepViewModel.swift in Sources */,
 				EFA6FF14B9EA87D684D13997 /* MeetingSummary.swift in Sources */,
+				C3D4E5F60718293A4B5C6D7E /* NativeCopilotService.swift in Sources */,
 				53C790261AD872E1403EA7EA /* PostMeetingView.swift in Sources */,
 				8B7FE96BABD85F0D4593D1EC /* PostMeetingViewModel.swift in Sources */,
 				932C4FC6A5986934346B26BC /* RoninApp.swift in Sources */,

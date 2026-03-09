@@ -85,6 +85,16 @@ class LiveCopilotViewModel: ObservableObject {
     var meetingTitle: String = ""
     var authToken: String = ""  // Set from BackendProcessService before connect()
 
+    // Native copilot (Apple Intelligence)
+    private(set) var nativeCopilotService: NativeCopilotService?
+    var meetingConfig: MeetingConfig?
+    var accumulatedNotes: String = ""
+
+    /// Whether native (on-device) copilot is active for this session
+    var isNativeCopilot: Bool {
+        nativeCopilotService != nil
+    }
+
     private var audioService: AudioCaptureService?
     private var wsService: WebSocketService?
     private var timer: Timer?
@@ -94,6 +104,21 @@ class LiveCopilotViewModel: ObservableObject {
     func connect() {
         statusText = "Connecting..."
         addDebug("Starting connection...")
+
+        // Configure native copilot if Apple Intelligence is selected
+        let currentProvider = LLMSettingsViewModel.currentProvider
+        if currentProvider.isAppleIntelligence {
+            let service = NativeCopilotService()
+            if service.configureFoundationModels() {
+                nativeCopilotService = service
+                addDebug("🧠 Apple Intelligence copilot configured (on-device)")
+            } else {
+                addDebug("⚠️ Apple Intelligence not available — copilot suggestions disabled")
+                nativeCopilotService = nil
+            }
+        } else {
+            nativeCopilotService = nil
+        }
 
         // Tear down any previous connection before creating a new one
         // (prevents orphaned WebSocket connections that block the backend slot)
@@ -193,29 +218,73 @@ class LiveCopilotViewModel: ObservableObject {
             if segment.isQuestion {
                 triggerQuestionHighlight(segmentId: segment.id)
             }
+            // Trigger native copilot if Apple Intelligence is active
+            if nativeCopilotService != nil {
+                triggerNativeCopilot()
+            }
         case .copilotResponse(let response):
             addDebug("💡 Copilot: \(response.suggestions.count) suggestions, \(response.follow_up_questions.count) questions")
-            let guidance = CopilotGuidance(
-                followUpQuestions: response.follow_up_questions,
-                risks: response.risks,
-                factsFromNotes: response.facts_from_notes
-            )
-            // Skip empty responses (e.g., from LLM rate-limit errors / 429s)
-            // to avoid polluting history with contentless snapshots
-            guard !response.suggestions.isEmpty || !guidance.isEmpty else {
-                addDebug("⚠️ Empty copilot response — skipping (LLM may be rate-limited)")
-                return
-            }
-            let snapshot = CopilotSnapshot(
-                timestamp: Date(),
-                suggestions: response.suggestions,
-                guidance: guidance
-            )
-            copilotHistory.append(snapshot)
+            appendCopilotResponse(response)
         case .error(let msg):
             addDebug("🔴 Backend error: \(msg)")
             errorMessage = msg
             scheduleErrorDismiss()
+        }
+    }
+
+    /// Append a copilot response to history (shared by backend and native paths).
+    private func appendCopilotResponse(_ response: CopilotResponse) {
+        let guidance = CopilotGuidance(
+            followUpQuestions: response.follow_up_questions,
+            risks: response.risks,
+            factsFromNotes: response.facts_from_notes
+        )
+        // Skip empty responses (e.g., from LLM rate-limit errors / 429s)
+        guard !response.suggestions.isEmpty || !guidance.isEmpty else {
+            addDebug("⚠️ Empty copilot response — skipping")
+            return
+        }
+        let snapshot = CopilotSnapshot(
+            timestamp: Date(),
+            suggestions: response.suggestions,
+            guidance: guidance
+        )
+        copilotHistory.append(snapshot)
+    }
+
+    // MARK: - Native Copilot (Apple Intelligence)
+
+    /// Trigger on-device copilot generation. Debounce/in-flight handled by NativeCopilotService.
+    private func triggerNativeCopilot() {
+        guard let service = nativeCopilotService,
+              let config = meetingConfig else { return }
+
+        // Collect recent transcript (~1.5 minutes worth, ~20 segments/minute)
+        let recentCount = min(transcriptSegments.count, 30)
+        let recentSegments = transcriptSegments.suffix(recentCount)
+        let transcriptWindow = recentSegments.map { $0.text }.joined(separator: "\n")
+
+        guard !transcriptWindow.isEmpty else { return }
+
+        Task {
+            do {
+                let response = try await service.generateCopilotResponse(
+                    transcriptWindow: transcriptWindow,
+                    config: config,
+                    relevantNotes: accumulatedNotes
+                )
+                addDebug("🧠 Native copilot: \(response.suggestions.count) suggestions")
+                appendCopilotResponse(response)
+            } catch let error as NativeCopilotError {
+                switch error {
+                case .debounced, .inFlight:
+                    break // Expected — silently skip
+                default:
+                    addDebug("⚠️ Native copilot error: \(error.localizedDescription ?? "unknown")")
+                }
+            } catch {
+                addDebug("⚠️ Native copilot error: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -251,6 +320,7 @@ class LiveCopilotViewModel: ObservableObject {
         wsService?.disconnect()
         timer?.invalidate()
         timer = nil
+        nativeCopilotService?.reset()
 
         // Defer @Published changes to next run-loop tick
         DispatchQueue.main.async { [weak self] in
@@ -290,6 +360,10 @@ class LiveCopilotViewModel: ObservableObject {
         wsMessagesReceived = 0
         wsCloseCode = ""
         showEndConfirmation = false
+        nativeCopilotService?.reset()
+        nativeCopilotService = nil
+        meetingConfig = nil
+        accumulatedNotes = ""
     }
 
     // MARK: - Question Highlight

@@ -91,21 +91,28 @@ struct LLMSettingsTab: View {
                     .matrixGlow(radius: 4)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    // Provider picker — two options
+                    // Provider picker — four options
                     Picker("Provider", selection: $vm.selectedProvider) {
                         ForEach(LLMSettingsViewModel.Provider.allCases) { provider in
-                            Text(provider.displayName).tag(provider)
+                            HStack {
+                                Text(provider.displayName)
+                                if provider.isAppleIntelligence && !LLMSettingsViewModel.isAppleIntelligenceAvailable {
+                                    Text("(unavailable)")
+                                        .foregroundColor(.matrixFaded)
+                                }
+                            }
+                            .tag(provider)
                         }
                     }
                     .pickerStyle(.radioGroup)
                     .foregroundColor(.matrixText)
 
-                    // Privacy note for cloud
-                    if vm.selectedProvider.isCloud {
+                    // Privacy/status notes
+                    if let cloudWarning = vm.selectedProvider.cloudWarning {
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundColor(.matrixWarning)
-                            Text("Transcript text will be sent to OpenAI servers. Audio always stays on your Mac.")
+                            Text(cloudWarning)
                                 .font(.matrixCaption)
                                 .foregroundColor(.matrixWarning)
                         }
@@ -115,6 +122,30 @@ struct LLMSettingsTab: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
                                 .stroke(Color.matrixWarning.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+
+                    if vm.selectedProvider.isAppleIntelligence {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: LLMSettingsViewModel.isAppleIntelligenceAvailable
+                                  ? "checkmark.shield.fill" : "xmark.shield.fill")
+                                .foregroundColor(LLMSettingsViewModel.isAppleIntelligenceAvailable
+                                                 ? .matrixNeon : .matrixStatusError)
+                            Text(LLMSettingsViewModel.isAppleIntelligenceAvailable
+                                 ? "Everything stays on your Mac. No API key required."
+                                 : "Apple Intelligence requires macOS 26 and a supported Mac.")
+                                .font(.matrixCaption)
+                                .foregroundColor(LLMSettingsViewModel.isAppleIntelligenceAvailable
+                                                 ? .matrixNeon : .matrixStatusError)
+                        }
+                        .padding(8)
+                        .background((LLMSettingsViewModel.isAppleIntelligenceAvailable
+                                     ? Color.matrixNeon : Color.matrixStatusError).opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke((LLMSettingsViewModel.isAppleIntelligenceAvailable
+                                         ? Color.matrixNeon : Color.matrixStatusError).opacity(0.3), lineWidth: 1)
                         )
                     }
 
@@ -149,6 +180,30 @@ struct LLMSettingsTab: View {
                             Text("Default: gpt-4o-mini")
                                 .font(.matrixCaption)
                                 .foregroundColor(.matrixFaded)
+                        }
+
+                    case .anthropic:
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("API Key")
+                                .font(.matrixCaption)
+                                .foregroundColor(.matrixDim)
+                            SecureField("sk-ant-...", text: $vm.anthropicApiKey)
+                                .textFieldStyle(MatrixTextFieldStyle())
+                            Text("Model (optional)")
+                                .font(.matrixCaption)
+                                .foregroundColor(.matrixDim)
+                            TextField("claude-sonnet-4-20250514", text: $vm.llmModel)
+                                .textFieldStyle(MatrixTextFieldStyle())
+                            Text("Default: claude-sonnet-4-20250514")
+                                .font(.matrixCaption)
+                                .foregroundColor(.matrixFaded)
+                        }
+
+                    case .appleIntelligence:
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("No configuration needed. Apple Intelligence runs entirely on-device.")
+                                .font(.matrixCaption)
+                                .foregroundColor(.matrixDim)
                         }
                     }
                 }
@@ -292,17 +347,19 @@ struct AboutTab: View {
 
             Spacer()
 
-            if provider.isCloud {
-                Text("Audio stays on your Mac. Transcript sent to GPT for analysis.")
-                    .font(.matrixCaption)
-                    .foregroundColor(.matrixFaded)
-                    .padding(.bottom, 16)
-            } else {
-                Text("Everything stays on your Mac.")
-                    .font(.matrixCaption)
-                    .foregroundColor(.matrixFaded)
-                    .padding(.bottom, 16)
+            Group {
+                switch provider {
+                case .openai:
+                    Text("Audio stays on your Mac. Transcript sent to OpenAI for analysis.")
+                case .anthropic:
+                    Text("Audio stays on your Mac. Transcript sent to Anthropic for analysis.")
+                case .local, .appleIntelligence:
+                    Text("Everything stays on your Mac.")
+                }
             }
+            .font(.matrixCaption)
+            .foregroundColor(.matrixFaded)
+            .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.matrixBlack)

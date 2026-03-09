@@ -44,6 +44,11 @@ class PostMeetingViewModel: ObservableObject {
     private var lastSessionId: String?
     private var progressTimer: Timer?
 
+    // Native summary generation (Apple Intelligence)
+    var nativeCopilotService: NativeCopilotService?
+    var meetingConfig: MeetingConfig?
+    var meetingNotes: String = ""
+
     private let backendAPI = BackendAPIService()
 
     /// Set the auth token received from BackendProcessService.
@@ -62,9 +67,33 @@ class PostMeetingViewModel: ObservableObject {
         startProgressTimer()
 
         do {
+            // Always call backend to get transcript (and save it to disk)
             let result = try await backendAPI.endMeeting(sessionId: sessionId)
-            summary = result
             fullTranscript = result.full_transcript
+
+            // If Apple Intelligence is active, generate summary locally
+            if let service = nativeCopilotService, let config = meetingConfig, service.hasProvider {
+                progressPhase = .analyzing
+                do {
+                    var nativeSummary = try await service.generateSummary(
+                        transcript: fullTranscript,
+                        config: config,
+                        notes: meetingNotes
+                    )
+                    nativeSummary.full_transcript = fullTranscript
+                    summary = nativeSummary
+                } catch {
+                    // Fall back to backend summary if native fails
+                    if !result.executive_summary.isEmpty && !result.executive_summary.hasPrefix("No LLM provider") {
+                        summary = result
+                    } else {
+                        errorMessage = "Apple Intelligence summary failed: \(error.localizedDescription)"
+                    }
+                }
+            } else {
+                // Backend-generated summary (Local/OpenAI/Anthropic)
+                summary = result
+            }
         } catch {
             errorMessage = "Failed to generate summary: \(error.localizedDescription)"
         }

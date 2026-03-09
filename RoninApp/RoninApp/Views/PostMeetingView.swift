@@ -3,6 +3,7 @@ import SwiftUI
 struct PostMeetingView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var backendService: BackendProcessService
+    @EnvironmentObject var copilotVM: LiveCopilotViewModel
     @StateObject private var viewModel = PostMeetingViewModel()
 
     var body: some View {
@@ -165,6 +166,10 @@ struct PostMeetingView: View {
         .onAppear {
             viewModel.meetingTitle = appState.meetingTitle
             viewModel.setAuthToken(backendService.authToken)
+            // Pass native copilot context for Apple Intelligence summary generation
+            viewModel.nativeCopilotService = copilotVM.nativeCopilotService
+            viewModel.meetingConfig = copilotVM.meetingConfig
+            viewModel.meetingNotes = copilotVM.accumulatedNotes
             if let sessionId = appState.sessionId {
                 Task {
                     await viewModel.loadSummary(sessionId: sessionId)

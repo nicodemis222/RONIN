@@ -1,6 +1,6 @@
 # RONIN
 
-A local-first meeting copilot for macOS. Real-time transcription, AI-powered suggestions, and post-meeting summaries — all running on your machine with zero cloud dependencies.
+A local-first meeting copilot for macOS. Real-time transcription, AI-powered suggestions, and post-meeting summaries — with four LLM provider options including fully on-device Apple Intelligence.
 
 ![Version](https://img.shields.io/badge/version-1.0.0-00FF41)
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple&logoColor=00FF41)
@@ -21,7 +21,7 @@ RONIN listens to your microphone during meetings and provides:
 - **Relevant facts** — surfaces info from your prep notes when the conversation touches on those topics
 - **Post-meeting summary** — executive summary, key decisions, action items, and open questions
 
-Everything runs locally by default. Audio never leaves your Mac. Choose between a local LLM via LM Studio or a cloud provider (OpenAI/Anthropic) — audio always stays on-device regardless.
+Everything runs locally by default. Audio never leaves your Mac. Choose from four LLM providers — Apple Intelligence (fully on-device, macOS 26+), LM Studio (local), OpenAI, or Anthropic (Claude) — audio always stays on-device regardless of provider choice.
 
 ## Architecture
 
@@ -37,6 +37,8 @@ Everything runs locally by default. Audio never leaves your Mac. Choose between 
 │  (AVCaptureSession)       │                              │
 │  SettingsView (⌘,)        │                              │
 │  TutorialOverlay          │                              │
+│  NativeCopilotService ◄───┤ (Apple Intelligence path)    │
+│  FoundationModelsProvider │                              │
 └───────────────────────────┼──────────────────────────────┘
                             │
 ┌───────────────────────────┼──────────────────────────────┐
@@ -47,14 +49,19 @@ Everything runs locally by default. Audio never leaves your Mac. Choose between 
 │  │ (MLX Whisper)│  │ (pluggable)  │  │ Manager        │ │
 │  └──────────────┘  └──────┬───────┘  └────────────────┘ │
 │                           │                              │
-│              ┌────────────┼────────────┐                 │
-│              ▼            ▼            ▼                 │
-│          LM Studio    OpenAI      Anthropic              │
-│          (local)      (cloud)     (cloud)                │
+│         ┌─────────────────┼──────────────┐               │
+│         ▼          ▼      ▼        ▼     ▼               │
+│     LM Studio   OpenAI  Anthropic  none                  │
+│     (local)     (cloud)  (cloud)   (transcription only)  │
 └──────────────────────────────────────────────────────────┘
 ```
 
-The Swift app captures mic audio via `AVCaptureSession` (no aggregate device — works alongside Teams, Zoom, WhatsApp without conflicts), streams PCM chunks over WebSocket to the Python backend. The backend runs MLX Whisper for transcription and calls the configured LLM provider for copilot suggestions and summaries.
+**Two LLM paths:**
+
+- **Backend path** (LM Studio / OpenAI / Anthropic): The Python backend handles both transcription and LLM calls. Audio → MLX Whisper → transcript + LLM copilot/summary.
+- **Apple Intelligence path** (macOS 26+): The Python backend runs in transcription-only mode (`LLM_PROVIDER=none`). Audio → MLX Whisper → transcript via WebSocket → Swift app generates copilot responses and summaries on-device via Apple Foundation Models. Zero network latency, complete privacy.
+
+The Swift app captures mic audio via `AVCaptureSession` (no aggregate device — works alongside Teams, Zoom, WhatsApp without conflicts), streams PCM chunks over WebSocket to the Python backend for transcription.
 
 ## System Requirements
 
@@ -62,7 +69,7 @@ The Swift app captures mic audio via `AVCaptureSession` (no aggregate device —
 
 | Component | Minimum | Recommended |
 |---|---|---|
-| **Processor** | Apple Silicon M1 | M1 Pro or later |
+| **Processor** | Apple Silicon M1 | M1 Pro or later (M1–M5 supported) |
 | **RAM** | 16 GB | 32 GB (for larger LLM models) |
 | **Disk** | 5 GB free | 10 GB free (model cache + transcripts) |
 | **Network** | None (fully local) | Internet for initial model download |
@@ -80,9 +87,10 @@ RONIN runs exclusively on **Apple Silicon** Macs. The MLX Whisper engine uses Me
 | Requirement | Version | Purpose |
 |---|---|---|
 | **macOS** | 15.0+ (Sequoia) | SwiftUI features, AVCaptureSession APIs |
+| **macOS** | 26+ (Tahoe) | Apple Intelligence provider (optional — other providers work on 15+) |
 | **Xcode** | 16+ | Build the Swift app (development only) |
 | **Python** | 3.13+ | Backend runtime (3.14 supported) |
-| **LM Studio** | Latest | Local LLM inference (or use OpenAI/Anthropic instead) |
+| **LM Studio** | Latest | Local LLM inference (or use OpenAI/Anthropic/Apple Intelligence instead) |
 | **XcodeGen** | Latest | Generates Xcode project from `project.yml` (development only) |
 
 ## Prerequisites
@@ -90,10 +98,11 @@ RONIN runs exclusively on **Apple Silicon** Macs. The MLX Whisper engine uses Me
 | Requirement | Version | Purpose |
 |---|---|---|
 | **macOS** | 15.0+ | SwiftUI features, AVCaptureSession APIs |
+| **macOS** | 26+ (optional) | Apple Intelligence on-device LLM provider |
 | **Xcode** | 16+ | Build the Swift app |
 | **Python** | 3.13+ | Backend runtime (3.14 supported) |
-| **LM Studio** | Latest | Local LLM inference (or use OpenAI/Anthropic instead) |
-| **Apple Silicon** | M1+ | MLX Whisper requires Metal |
+| **LM Studio** | Latest | Local LLM inference (or use OpenAI/Anthropic/Apple Intelligence instead) |
+| **Apple Silicon** | M1–M5 | MLX Whisper requires Metal |
 | **XcodeGen** | Latest | Generates Xcode project from `project.yml` (install via `brew install xcodegen`) |
 
 ## Setup
@@ -115,7 +124,14 @@ The first run will download `mlx-community/whisper-small-mlx` (~150 MB). Make su
 
 ### 3. Set up an LLM provider
 
-**Option A: Local (LM Studio) — fully private, no data leaves your Mac**
+**Option A: Apple Intelligence (macOS 26+) — fully on-device, zero configuration**
+
+1. In RONIN, open Settings (⌘,) → LLM tab → select Apple Intelligence
+2. Click "Save & Restart Backend"
+
+No API key, no model download, no network required. Copilot responses and summaries are generated entirely on-device via Apple Foundation Models. The backend runs in transcription-only mode. Available on Apple Silicon Macs running macOS 26 (Tahoe) or later with Apple Intelligence support.
+
+**Option B: Local (LM Studio) — fully private, no data leaves your Mac**
 
 1. Download and install [LM Studio](https://lmstudio.ai)
 2. Download a model — recommended: **Qwen 3.5 7B** or **Qwen 3.5 14B** (larger = better suggestions, but slower)
@@ -123,15 +139,21 @@ The first run will download `mlx-community/whisper-small-mlx` (~150 MB). Make su
 
 > **Tip**: Qwen 3.x models have a "thinking" mode that outputs `<think>...</think>` blocks. RONIN suppresses this automatically via prompt engineering, reducing response time from ~30s to ~4s.
 
-**Option B: OpenAI — faster responses, requires API key**
+**Option C: OpenAI — faster responses, requires API key**
 
 1. Get an API key from [platform.openai.com](https://platform.openai.com)
 2. In RONIN, open Settings (⌘,) → LLM tab → select OpenAI
 3. Enter your API key and click "Save & Restart Backend"
 
-> **Note**: With cloud providers, transcript text is sent to the provider's API for analysis. Audio always stays on your Mac — only the text transcription is transmitted.
+**Option D: Anthropic (Claude) — high-quality responses, requires API key**
 
-**Option C: Transcription only — no LLM**
+1. Get an API key from [console.anthropic.com](https://console.anthropic.com)
+2. In RONIN, open Settings (⌘,) → LLM tab → select Anthropic
+3. Enter your API key and click "Save & Restart Backend"
+
+> **Note**: With cloud providers (OpenAI, Anthropic), transcript text is sent to the provider's API for analysis. Audio always stays on your Mac — only the text transcription is transmitted.
+
+**Option E: Transcription only — no LLM**
 
 If no LLM is configured, RONIN still captures and saves the full transcript. You'll get a saved transcript file but no AI-generated suggestions or summaries.
 
@@ -197,7 +219,7 @@ Export to Markdown or copy to clipboard. The exported Markdown includes the full
 
 Most settings can be changed in the app via **Settings** (⌘,):
 - **General** — Re-launch the onboarding tutorial
-- **LLM** — Switch between Local (LM Studio) and OpenAI, configure API keys
+- **LLM** — Switch between Apple Intelligence, Local (LM Studio), OpenAI, and Anthropic (Claude); configure API keys
 - **Overlay** — Default compact mode, panel layout orientation, overlay opacity
 
 Backend settings in `backend/app/config.py`:
@@ -252,6 +274,7 @@ The Swift app uses only Apple-provided frameworks:
 |-----------|---------|
 | SwiftUI | Declarative UI |
 | Foundation | Core types, networking, JSON |
+| FoundationModels | On-device AI via Apple Intelligence (macOS 26+, optional) |
 | AppKit | macOS-specific UI (pasteboard, windows) |
 | AVFoundation | Microphone audio capture |
 | CoreMedia | Media sample buffers |
@@ -280,6 +303,7 @@ RONIN/
 │       ├── Models/
 │       │   ├── CopilotSuggestion.swift   # Suggestion, Risk, NoteFact models
 │       │   ├── DependencyStatus.swift     # Startup dependency check states
+│       │   ├── GenerableTypes.swift       # @Generable types for Foundation Models
 │       │   ├── MeetingConfig.swift        # Meeting setup request/response
 │       │   ├── MeetingSummary.swift       # Post-meeting summary model
 │       │   ├── TranscriptSegment.swift    # Individual transcript line
@@ -303,11 +327,13 @@ RONIN/
 │       │   ├── LLMSettingsViewModel.swift # LLM provider configuration
 │       │   └── TutorialViewModel.swift    # Onboarding tutorial state
 │       └── Services/
-│           ├── AudioCaptureService.swift  # Mic capture via AVCaptureSession
-│           ├── BackendProcessService.swift# Python process lifecycle + deps
-│           ├── BackendAPIService.swift    # HTTP client for REST endpoints
-│           ├── WebSocketService.swift     # WebSocket client
-│           └── KeychainHelper.swift       # Secure API key storage
+│           ├── AudioCaptureService.swift       # Mic capture via AVCaptureSession
+│           ├── BackendProcessService.swift     # Python process lifecycle + deps
+│           ├── BackendAPIService.swift         # HTTP client for REST endpoints
+│           ├── FoundationModelsProvider.swift  # Apple Intelligence on-device AI
+│           ├── KeychainHelper.swift            # Secure API key storage
+│           ├── NativeCopilotService.swift      # On-device copilot coordinator
+│           └── WebSocketService.swift          # WebSocket client
 │
 ├── backend/                          # Python FastAPI backend
 │   ├── run.py                        # Entry point with logging setup
@@ -423,8 +449,9 @@ The audio pipeline:
 
 ### Copilot suggestions not appearing
 - Make sure your LLM provider is configured (Settings ⌘, → LLM tab)
+- For Apple Intelligence: requires macOS 26+ and Apple Intelligence-capable hardware
 - For local mode: LM Studio must be running with a loaded model
-- For OpenAI mode: verify your API key is valid
+- For OpenAI/Anthropic mode: verify your API key is valid
 - Check the debug console for "Copilot generation failed" errors
 - The LLM needs ~4-10 seconds per response depending on model/provider
 
