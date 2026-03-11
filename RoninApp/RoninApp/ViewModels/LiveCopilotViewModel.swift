@@ -343,12 +343,16 @@ class LiveCopilotViewModel: ObservableObject {
         timer = nil
         nativeCopilotService?.reset()
 
-        // Delay WebSocket disconnect briefly so the backend can flush
-        // its pending audio buffer (force-transcribe the last few seconds).
-        // The backend's _flush_pending_audio() runs on disconnect, so
-        // we need the connection alive long enough for that to complete.
+        // Delay WebSocket disconnect so the backend can process any
+        // in-flight transcription before the flush. The backend's
+        // _flush_pending_audio() runs on disconnect and force-transcribes
+        // the remaining audio buffer. PostMeetingViewModel waits 2s before
+        // calling /meeting/end, so the timeline is:
+        //   T=0: audio stops, no new chunks sent
+        //   T=1: WebSocket disconnects, flush runs
+        //   T=2: /meeting/end called, reads full transcript
         addDebug("Stopping audio — waiting for backend flush before disconnect...")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.wsService?.disconnect()
             self?.isConnected = false
             self?.addDebug("endMeeting() completed — WebSocket disconnected")

@@ -106,11 +106,24 @@ class PostMeetingViewModel: ObservableObject {
         // Start a timer to update elapsed time and cycle phases
         startProgressTimer()
 
+        // Wait for the backend WebSocket flush to complete. When "End Meeting"
+        // is clicked, the frontend delays WebSocket disconnect by 0.5s.
+        // The backend's _flush_pending_audio() runs on disconnect and force-
+        // transcribes the remaining audio buffer (~0.5-2s). We need the flush
+        // to finish BEFORE calling /meeting/end so the backend session has
+        // all transcript segments when we read full_transcript.
+        try? await Task.sleep(nanoseconds: 2_000_000_000)  // 2 seconds
+
         // Build frontend transcript from accumulated segments (fallback source).
-        // Only include final segments (same logic as backend's full_transcript).
+        // Include final segments + the last segment even if partial (matches
+        // the backend's full_transcript logic so no speech is lost).
+        let segmentCount = frontendTranscriptSegments.count
         let frontendTranscript = frontendTranscriptSegments
-            .filter { $0.isFinal }
-            .map { segment -> String in
+            .enumerated()
+            .filter { index, segment in
+                segment.isFinal || index == segmentCount - 1
+            }
+            .map { _, segment -> String in
                 let speaker = segment.speaker.isEmpty ? "" : " \(segment.speaker):"
                 return "[\(segment.timestamp)]\(speaker) \(segment.text)"
             }

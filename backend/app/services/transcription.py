@@ -84,9 +84,17 @@ class TranscriptionService:
         )
         enough_audio = buffer_duration >= 3.0
 
+        # Force a final when the buffer is near capacity. Without this,
+        # continuous speech exceeding MAX_BUFFER_DURATION_SEC silently loses
+        # early text: the buffer trims old audio, Whisper only sees what
+        # remains, and the partial replaces the previous partial — so all
+        # text before the trim window is permanently lost.
+        buffer_near_full = buffer_duration >= MAX_BUFFER_DURATION_SEC * 0.85
+
         logger.debug(
             f"try_transcribe: buf={buffer_duration:.1f}s, speech={self.speech_active}, "
-            f"silence={self.silence_count}, boundary={is_boundary}, enough={enough_audio}"
+            f"silence={self.silence_count}, boundary={is_boundary}, "
+            f"enough={enough_audio}, near_full={buffer_near_full}"
         )
 
         if not (is_boundary or enough_audio):
@@ -103,19 +111,22 @@ class TranscriptionService:
             logger.info("Transcription returned no result (model error or no new text)")
             return None
 
-        # Tag segment as final (speech boundary) or partial (mid-speech update).
-        # Partials replace the previous partial in the UI for a streaming effect;
-        # finals commit the utterance and reset the buffer for the next one.
-        result["is_final"] = is_boundary
+        # Tag segment as final when:
+        # 1. Silence detected after speech (natural boundary), OR
+        # 2. Buffer is near capacity (forced commit to prevent text loss)
+        is_final = is_boundary or buffer_near_full
+        result["is_final"] = is_final
 
+        reason = "boundary" if is_boundary else ("buffer-full" if buffer_near_full else "partial")
         logger.info(
             f"Transcription result: {len(result['text'])} chars, "
             f"speaker={result.get('speaker', '')}, "
-            f"{'final' if is_boundary else 'partial'}"
+            f"{reason}"
         )
 
-        if is_boundary:
-            self.speech_active = False
+        if is_final:
+            if is_boundary:
+                self.speech_active = False
             self.silence_count = 0
             # Reset buffer so the next transcription starts fresh.
             # This eliminates redundancy: Whisper no longer re-transcribes
