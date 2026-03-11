@@ -101,16 +101,16 @@ class BackendProcessService: ObservableObject {
         ]
 
         // Determine paths — support both bundled (Resources/) and dev mode
-        let resourcePath: String
         let pythonPath: String
         let backendDir: String
         let sitePackagesPath: String
         let modelCachePath: String?
+        let isBundledMode: Bool
 
         if let bundlePath = Bundle.main.resourcePath,
            FileManager.default.fileExists(atPath: bundlePath + "/python/bin/python3.14") {
             // --- Bundled mode (inside .app) ---
-            resourcePath = bundlePath
+            isBundledMode = true
             pythonPath = bundlePath + "/python/bin/python3.14"
             backendDir = bundlePath + "/backend"
             sitePackagesPath = bundlePath + "/python/lib/python3.14/site-packages"
@@ -120,11 +120,11 @@ class BackendProcessService: ObservableObject {
             appendLog("[RONIN] Bundled mode — Resources: \(bundlePath)")
         } else {
             // --- Dev mode (running from Xcode) ---
+            isBundledMode = false
             let projectRoot = findProjectRoot()
             pythonPath = projectRoot + "/backend/.venv/bin/python3.14"
             backendDir = projectRoot + "/backend"
             sitePackagesPath = projectRoot + "/backend/.venv/lib/python3.14/site-packages"
-            resourcePath = projectRoot
             modelCachePath = nil
             appendLog("[RONIN] Dev mode — project: \(projectRoot)")
         }
@@ -140,7 +140,7 @@ class BackendProcessService: ObservableObject {
             status = .failed("Python not found at: \(pythonPath)")
             return
         }
-        updateDependency(.pythonRuntime(.passed))
+        updateDependency(.pythonRuntime(.passed, detail: "Python 3.14"))
 
         guard FileManager.default.fileExists(atPath: runScript) else {
             updateDependency(.backendProcess(.failed("run.py not found")))
@@ -177,6 +177,16 @@ class BackendProcessService: ObservableObject {
             // Bundled mode: models are pre-cached, no network needed
             env["HF_HUB_CACHE"] = modelCache
             env["HF_HUB_OFFLINE"] = "1"
+        } else if isBundledMode {
+            // Bundled mode WITHOUT pre-cached models: allow download but fix SSL certs.
+            // The bundled Python doesn't have access to Homebrew's certifi, so we point
+            // it at the system CA bundle so HTTPS (HuggingFace model downloads) works.
+            let systemCerts = "/etc/ssl/cert.pem"
+            if FileManager.default.fileExists(atPath: systemCerts) {
+                env["SSL_CERT_FILE"] = systemCerts
+                env["REQUESTS_CA_BUNDLE"] = systemCerts
+                appendLog("[RONIN] SSL certs: using system CA bundle for model downloads")
+            }
         }
         // Dev mode: allow HuggingFace downloads so the Whisper model can be
         // fetched on first run (HF_HUB_OFFLINE is intentionally NOT set).
@@ -479,9 +489,10 @@ class BackendProcessService: ObservableObject {
 
         // Whisper
         if let whisper = details.dependencies["whisper"] {
+            let modelName = whisper.model ?? "unknown"
             if whisper.status == "loaded" || whisper.status == "available" {
-                updateDependency(.whisperModel(.passed))
-                appendLog("[RONIN] Whisper: \(whisper.status) (\(whisper.model ?? "unknown"))")
+                updateDependency(.whisperModel(.passed, detail: modelName))
+                appendLog("[RONIN] Whisper: \(whisper.status) (\(modelName))")
             } else {
                 updateDependency(.whisperModel(.failed(whisper.detail ?? "Not loaded")))
                 appendLog("[RONIN] Whisper: \(whisper.status)")

@@ -20,11 +20,6 @@ struct MeetingPrepView: View {
 
                     Spacer()
 
-                    // Compact backend status (shown when all checks pass)
-                    if backendService.status.isRunning && backendService.allDependenciesPassed {
-                        backendStatusBadge
-                    }
-
                     // Tutorial button
                     Button {
                         tutorialVM.relaunchTutorial()
@@ -46,14 +41,12 @@ struct MeetingPrepView: View {
                     .help("Settings (⌘,)")
                 }
 
-                // Dependency checklist (shown during startup or when checks are incomplete/failed)
-                if !backendService.status.isRunning || !backendService.allDependenciesPassed {
-                    DependencyChecklistView(
-                        dependencies: backendService.dependencies,
-                        onRetry: { backendService.restart() }
-                    )
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
+                // Dependency checklist — always visible so users can see system status
+                DependencyChecklistView(
+                    dependencies: backendService.dependencies,
+                    onRetry: { backendService.restart() }
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
 
                 // Meeting Info
                 VStack(alignment: .leading, spacing: 12) {
@@ -218,53 +211,6 @@ struct MeetingPrepView: View {
         }
         .onChange(of: backendService.authToken) { _, token in
             viewModel.setAuthToken(token)
-        }
-    }
-
-    @ViewBuilder
-    private var backendStatusBadge: some View {
-        HStack(spacing: 6) {
-            switch backendService.status {
-            case .stopped, .starting:
-                ProgressView()
-                    .controlSize(.mini)
-                    .tint(.matrixDim)
-                Text(backendService.status.message)
-                    .font(.matrixCaption)
-                    .foregroundColor(.matrixDim)
-            case .running:
-                Circle()
-                    .fill(Color.matrixStatusActive)
-                    .frame(width: 8, height: 8)
-                    .shadow(color: Color.matrixStatusActive.opacity(0.6), radius: 4)
-                Text("Backend online")
-                    .font(.matrixCaption)
-                    .foregroundColor(.matrixDim)
-
-                // LLM provider indicator
-                let provider = LLMSettingsViewModel.currentProvider
-                Text("·")
-                    .foregroundColor(.matrixFaded)
-                Text(provider.shortLabel)
-                    .font(.matrixCaption)
-                    .foregroundColor(provider.isAppleIntelligence ? .matrixCyan
-                                     : provider.isCloud ? .matrixWarning : .matrixNeon)
-                    .matrixGlow(radius: 2)
-            case .failed(let msg):
-                Circle()
-                    .fill(Color.matrixStatusError)
-                    .frame(width: 8, height: 8)
-                    .shadow(color: Color.matrixStatusError.opacity(0.6), radius: 4)
-                Text(msg)
-                    .font(.matrixCaption)
-                    .foregroundColor(.matrixStatusError)
-                    .lineLimit(1)
-                Button("Retry") {
-                    backendService.restart()
-                }
-                .font(.matrixCaption)
-                .buttonStyle(MatrixSecondaryButtonStyle())
-            }
         }
     }
 

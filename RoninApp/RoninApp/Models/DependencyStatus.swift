@@ -38,12 +38,12 @@ struct DependencyCheck: Identifiable, Equatable {
 
     // MARK: - Factory Methods
 
-    static func pythonRuntime(_ state: CheckState) -> DependencyCheck {
+    static func pythonRuntime(_ state: CheckState, detail: String = "") -> DependencyCheck {
         DependencyCheck(
             id: "python",
             label: "Python Runtime",
             state: state,
-            detail: nil,
+            detail: detail.isEmpty ? nil : detail,
             failureMessage: failureMessage(for: state)
         )
     }
@@ -58,12 +58,12 @@ struct DependencyCheck: Identifiable, Equatable {
         )
     }
 
-    static func whisperModel(_ state: CheckState) -> DependencyCheck {
+    static func whisperModel(_ state: CheckState, detail: String = "") -> DependencyCheck {
         DependencyCheck(
             id: "whisper",
             label: "Whisper Model",
             state: state,
-            detail: nil,
+            detail: detail.isEmpty ? nil : detail,
             failureMessage: failureMessage(for: state)
         )
     }
