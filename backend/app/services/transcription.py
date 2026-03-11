@@ -50,7 +50,15 @@ class TranscriptionService:
     def add_audio(self, chunk: np.ndarray):
         self.audio_buffer = np.concatenate([self.audio_buffer, chunk])
 
-        max_samples = int(MAX_BUFFER_DURATION_SEC * SAMPLE_RATE)
+        # During active transcription, allow the buffer to grow beyond
+        # max so speech arriving while Whisper processes isn't trimmed
+        # away. The forced-final mechanism properly slices the buffer
+        # after transcription completes. Safety cap at 2x prevents
+        # unbounded growth if transcription hangs (~320KB max).
+        if self._transcribing:
+            max_samples = int(MAX_BUFFER_DURATION_SEC * SAMPLE_RATE * 2)
+        else:
+            max_samples = int(MAX_BUFFER_DURATION_SEC * SAMPLE_RATE)
         if len(self.audio_buffer) > max_samples:
             self.audio_buffer = self.audio_buffer[-max_samples:]
 
@@ -101,6 +109,14 @@ class TranscriptionService:
             return None
 
         logger.info(f"Starting transcription ({buffer_duration:.1f}s buffer)")
+
+        # Capture buffer length BEFORE Whisper starts. Whisper runs in a
+        # thread pool for 2-5 seconds; during that time add_audio() keeps
+        # growing the buffer. After a final commit, we slice the buffer
+        # to keep only samples that arrived during processing — otherwise
+        # those 2-5 seconds of speech are silently discarded.
+        samples_at_snapshot = len(self.audio_buffer)
+
         self._transcribing = True
         try:
             result = await self._transcribe_buffer()
@@ -128,10 +144,18 @@ class TranscriptionService:
             if is_boundary:
                 self.speech_active = False
             self.silence_count = 0
-            # Reset buffer so the next transcription starts fresh.
-            # This eliminates redundancy: Whisper no longer re-transcribes
-            # audio that has already been committed as a final segment.
-            self.audio_buffer = np.array([], dtype=np.int16)
+            # Keep audio that arrived DURING transcription. Without this,
+            # 2-5 seconds of speech recorded while Whisper was processing
+            # would be permanently lost on every commit cycle. Over a
+            # 30-minute meeting, this adds up to minutes of missing text.
+            if len(self.audio_buffer) > samples_at_snapshot:
+                self.audio_buffer = self.audio_buffer[samples_at_snapshot:]
+                logger.info(
+                    f"Buffer sliced: kept {len(self.audio_buffer) / SAMPLE_RATE:.1f}s "
+                    f"of audio that arrived during transcription"
+                )
+            else:
+                self.audio_buffer = np.array([], dtype=np.int16)
             self.previous_text = ""
 
         return result
