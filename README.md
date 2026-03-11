@@ -2,7 +2,7 @@
 
 A local-first meeting copilot for macOS. Real-time transcription, AI-powered suggestions, and post-meeting summaries — with four LLM provider options including fully on-device Apple Intelligence.
 
-![Version](https://img.shields.io/badge/version-1.1.0-00FF41)
+![Version](https://img.shields.io/badge/version-1.5.0-00FF41)
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple&logoColor=00FF41)
 ![Swift](https://img.shields.io/badge/Swift-5.10-00FF41?logo=swift&logoColor=00FF41)
 ![Python](https://img.shields.io/badge/Python-3.13%2B-00FF41?logo=python&logoColor=00FF41)
@@ -59,7 +59,7 @@ Everything runs locally by default. Audio never leaves your Mac. Choose from fou
 **Two LLM paths:**
 
 - **Backend path** (LM Studio / OpenAI / Anthropic): The Python backend handles both transcription and LLM calls. Audio → MLX Whisper → transcript + LLM copilot/summary.
-- **Apple Intelligence path** (macOS 26+): The Python backend runs in transcription-only mode (`LLM_PROVIDER=none`). Audio → MLX Whisper → transcript via WebSocket → Swift app generates copilot responses and summaries on-device via Apple Foundation Models. Zero network latency, complete privacy.
+- **Apple Intelligence path** (macOS 26+): The Python backend runs in transcription-only mode (`LLM_PROVIDER=none`). Audio → MLX Whisper → transcript via WebSocket → Swift app generates copilot responses and summaries on-device via Apple Foundation Models. Long transcripts use chunked map-reduce (split → extract → aggregate) to handle meetings of any length within the ~4K token context window. Zero network latency, complete privacy.
 
 The Swift app captures mic audio via `AVCaptureSession` (no aggregate device — works alongside Teams, Zoom, WhatsApp without conflicts), streams PCM chunks over WebSocket to the Python backend for transcription.
 
@@ -129,7 +129,7 @@ The first run will download `mlx-community/whisper-small-mlx` (~150 MB). Make su
 1. In RONIN, open Settings (⌘,) → LLM tab → select Apple Intelligence
 2. Click "Save & Restart Backend"
 
-No API key, no model download, no network required. Copilot responses and summaries are generated entirely on-device via Apple Foundation Models. The backend runs in transcription-only mode. Available on Apple Silicon Macs running macOS 26 (Tahoe) or later with Apple Intelligence support.
+No API key, no model download, no network required. Copilot responses and summaries are generated entirely on-device via Apple Foundation Models. Long transcripts are automatically handled via chunked map-reduce summarization — the entire meeting is processed regardless of length. The backend runs in transcription-only mode. Available on Apple Silicon Macs running macOS 26 (Tahoe) or later with Apple Intelligence support.
 
 **Option B: Local (LM Studio) — fully private, no data leaves your Mac**
 
@@ -211,7 +211,7 @@ Click **End Meeting** to generate a structured summary. A progress bar shows the
 - **Action Items** — Tasks with assignees and deadlines (when mentioned)
 - **Open Questions** — Unresolved topics needing follow-up
 
-**Export Full Markdown** saves the summary, decisions, action items, and the complete transcript as a `.md` file. **Copy All to Clipboard** copies everything for pasting into other tools. The exported Markdown includes the full transcript with speaker labels grouped under speaker headers.
+Export options: **Markdown** (`.md`), **Word** (`.docx`), or **Copy All to Clipboard**. All formats include the summary, decisions, action items, and the complete transcript with speaker labels.
 
 > **Safety**: The full transcript is saved to `~/Library/Logs/Ronin/transcripts/` before the LLM is called. Even if summary generation fails, your transcript is preserved. Quitting the app during an active meeting also triggers a graceful save.
 
@@ -233,8 +233,8 @@ Backend settings in `backend/app/config.py`:
 | `llm_model` | `""` | Override default model for the chosen provider |
 | `whisper_model` | `mlx-community/whisper-small-mlx` | Whisper model for transcription |
 | `llm_debounce_seconds` | `10.0` | Minimum seconds between copilot LLM calls |
-| `transcript_window_minutes` | `1.5` | How much recent transcript to send to the LLM |
-| `max_buffer_seconds` | `30.0` | Max audio buffer before forced transcription |
+| `transcript_window_minutes` | `5.0` | How much recent transcript to send to the LLM |
+| `max_buffer_seconds` | `15.0` | Max audio buffer before forced transcription |
 | `notes_max_context_chars` | `3000` | Max characters of notes context sent to LLM |
 | `whisper_no_speech_threshold` | `0.6` | Filter non-speech segments (music, noise) |
 | `whisper_logprob_threshold` | `-1.0` | Filter low-confidence Whisper output |

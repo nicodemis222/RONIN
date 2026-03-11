@@ -1,6 +1,6 @@
 # RONIN — Context Window Guide
 
-> **Note**: This guide applies to the **Local (LM Studio)** provider. If you're using **Apple Intelligence**, context is managed automatically with a ~4K token window and built-in retry logic. **OpenAI** and **Anthropic** cloud providers have large context windows (128K+) and rarely need tuning.
+> **Note**: This guide applies to the **Local (LM Studio)** provider. If you're using **Apple Intelligence**, context is managed automatically — long transcripts are split into chunks and summarized via map-reduce, so no content is lost despite the ~4K token window. **OpenAI** and **Anthropic** cloud providers have large context windows (128K+) and rarely need tuning.
 
 ## The Problem
 
@@ -47,12 +47,13 @@ lms load --context-length 32768 <model-identifier>
 RONIN has three layers of defense against context overflow:
 
 ### Layer 1: Transcript Truncation
-- **Copilot** (live): Keeps only the most recent ~6,000 chars (tail-only)
-- **Summary** (end of meeting): Keeps 25% from the start + 75% from the end
+- **Copilot** (live): Keeps only the most recent ~12,000 chars (tail-only, ~5 minutes of speech)
+- **Summary** (end of meeting): Keeps 15% from the start + 85% from the end (for backend LLM providers)
+- **Apple Intelligence summary**: Uses chunked map-reduce — no truncation, entire transcript is processed
 
 ### Layer 2: Retry with Halving
 If the LLM returns a 400 error, RONIN automatically:
-1. Halves the transcript budget (6K → 3K → 1.5K for copilot)
+1. Halves the transcript budget (12K → 6K → 3K for copilot)
 2. Retries up to 3 times
 3. Returns empty suggestions on final failure (never crashes)
 
@@ -64,7 +65,8 @@ RONIN now queries LM Studio at startup to detect the loaded model's context leng
 | 4,096          | ~5,700 chars   | ~11,500 chars  | ⚠️ Heavy truncation |
 | 8,192          | ~11,500 chars  | ~23,000 chars  | 🟡 Partial (37%) |
 | 16,384         | ~23,000 chars  | ~46,000 chars  | 🟡 Most content (73%) |
-| 32,768+        | 30,000 chars   | 60,000 chars   | ✅ Full meeting |
+| 32,768         | ~60,000 chars  | ~120,000 chars | ✅ Full meeting |
+| 65,536+        | ~60,000 chars  | ~500,000 chars | ✅ Full 2-hour+ meetings |
 
 ## Architecture for Long Meetings
 
@@ -76,10 +78,13 @@ For meetings exceeding 1 hour, the system uses a **sliding window** approach:
 │  [saved to ~/Library/Logs/Ronin/transcripts/]    │
 ├──────────────────────────────────────────────────┤
 │  Copilot sees: last N chars of transcript        │
-│  (real-time, tail-only window)                   │
+│  (real-time, tail-only ~5 min window)            │
 ├──────────────────────────────────────────────────┤
-│  Summary sees: first 25% + last 75%             │
-│  (captures intro context + recent decisions)     │
+│  Summary (backend): first 15% + last 85%         │
+│  (intros + decisions/wrap-up)                    │
+├──────────────────────────────────────────────────┤
+│  Summary (Apple Intelligence): chunked map-reduce│
+│  (entire transcript, no truncation)              │
 └──────────────────────────────────────────────────┘
 ```
 

@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.0</string>
+    <string>1.5.0</string>
     <key>CFBundleVersion</key>
-    <string>3</string>
+    <string>8</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Ronin needs microphone access to transcribe your meeting in real-time.</string>
     <key>NSLocalNetworkUsageDescription</key>

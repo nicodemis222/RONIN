@@ -223,7 +223,7 @@ struct LLMSettingsTab: View {
                             HStack(alignment: .top, spacing: 8) {
                                 Image(systemName: "info.circle.fill")
                                     .foregroundColor(.matrixCyan)
-                                Text("On-device model has a small context window (~4K tokens). Summaries for meetings longer than ~5 minutes will be generated from a truncated transcript. For comprehensive summaries of long meetings, use Anthropic or OpenAI.")
+                                Text("On-device model uses a ~4K token context window. Long transcripts are automatically split into chunks and summarized using a map-reduce strategy, so no content is lost. Copilot suggestions use the most recent ~5 minutes of conversation.")
                                     .font(.matrixCaption)
                                     .foregroundColor(.matrixCyan)
                             }

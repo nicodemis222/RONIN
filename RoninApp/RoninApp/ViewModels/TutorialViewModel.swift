@@ -30,7 +30,7 @@ class TutorialViewModel: ObservableObject {
             id: 0,
             icon: "terminal",
             title: "WELCOME_TO_RONIN",
-            body: "Your local-first meeting copilot. Real-time transcription, AI-powered suggestions, and post-meeting summaries. Run fully local with LM Studio, or connect to OpenAI for faster responses.",
+            body: "Your local-first meeting copilot. Real-time transcription, AI-powered suggestions, and post-meeting summaries. Four LLM options: Apple Intelligence (on-device), LM Studio (local), OpenAI, or Anthropic.",
             detail: "Audio never leaves your Mac. Transcription always runs on-device.",
             accentColor: .matrixNeon
         ),
@@ -54,7 +54,7 @@ class TutorialViewModel: ObservableObject {
             id: 3,
             icon: "doc.richtext",
             title: "PHASE_3: POST_MEETING",
-            body: "After ending the meeting, RONIN generates a structured summary with key decisions, action items with assignees, and open questions. Export to Markdown or copy to clipboard.",
+            body: "After ending the meeting, RONIN generates a structured summary with key decisions, action items with assignees, and open questions. Export to Markdown, Word (.docx), or copy to clipboard.",
             detail: nil,
             accentColor: .matrixLime
         ),
