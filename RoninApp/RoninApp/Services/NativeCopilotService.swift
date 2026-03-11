@@ -72,8 +72,8 @@ class NativeCopilotService: ObservableObject {
 
     // Budget defaults for Foundation Models (~4096-token context window)
     // Summary gets a larger budget to capture more decisions/action items
-    var copilotBudget: Int = 2400
-    var summaryBudget: Int = 3200
+    var copilotBudget: Int = 4800
+    var summaryBudget: Int = 6400
 
     // MARK: - Setup
 

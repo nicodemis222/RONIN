@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 COPILOT_SYSTEM_PROMPT = """You are a real-time meeting copilot. Help the user by providing suggested responses, follow-up questions, risks, and relevant facts.
 
 MEETING: {meeting_title}
@@ -171,7 +175,7 @@ SUMMARY_RESPONSE_SCHEMA = {
 class PromptBuilder:
     def build_copilot_prompt(
         self, transcript_window: str, config, relevant_notes: str,
-        max_transcript_chars: int = 6000,
+        max_transcript_chars: int = 12000,
         suppress_thinking: bool = True,
     ) -> list[dict]:
         system = COPILOT_SYSTEM_PROMPT.format(
@@ -184,6 +188,10 @@ class PromptBuilder:
         # Truncate transcript to fit model context.
         # For copilot, keep only the tail (most recent conversation).
         if len(transcript_window) > max_transcript_chars:
+            logger.info(
+                f"Copilot transcript truncated: {len(transcript_window):,} → "
+                f"{max_transcript_chars:,} chars"
+            )
             transcript_window = (
                 "[... earlier transcript omitted ...]\n\n"
                 + transcript_window[-max_transcript_chars:]
@@ -207,7 +215,7 @@ class PromptBuilder:
 
     def build_summary_prompt(
         self, transcript: str, config, notes: str,
-        max_transcript_chars: int = 100000,
+        max_transcript_chars: int = 200000,
         suppress_thinking: bool = True,
     ) -> list[dict]:
         system = SUMMARY_SYSTEM_PROMPT.format(
@@ -216,11 +224,15 @@ class PromptBuilder:
         )
 
         # Truncate transcript if it exceeds context budget.
-        # Keep the start (context/intros) and the end (decisions/wrap-up),
+        # Keep a small head (intros) and a large tail (decisions/wrap-up),
         # which are typically the most valuable for a summary.
         if len(transcript) > max_transcript_chars:
-            head_chars = max_transcript_chars // 4          # 25% from start
-            tail_chars = max_transcript_chars - head_chars  # 75% from end
+            head_chars = max_transcript_chars * 15 // 100   # 15% from start
+            tail_chars = max_transcript_chars - head_chars   # 85% from end
+            logger.warning(
+                f"Summary transcript truncated: {len(transcript):,} → "
+                f"{max_transcript_chars:,} chars (head={head_chars:,}, tail={tail_chars:,})"
+            )
             transcript = (
                 transcript[:head_chars]
                 + "\n\n[... transcript truncated for context length ...]\n\n"

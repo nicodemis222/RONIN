@@ -281,7 +281,7 @@ class LiveCopilotViewModel: ObservableObject {
               let config = meetingConfig else { return }
 
         // Collect recent transcript (~1.5 minutes worth, ~20 segments/minute)
-        let recentCount = min(transcriptSegments.count, 30)
+        let recentCount = min(transcriptSegments.count, 60)
         let recentSegments = transcriptSegments.suffix(recentCount)
         let transcriptWindow = recentSegments.map { $0.text }.joined(separator: "\n")
 

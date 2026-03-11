@@ -221,8 +221,8 @@ class LLMClient:
     calibration, and retry logic on context overflow.
     """
 
-    DEFAULT_COPILOT_BUDGET = 6000
-    DEFAULT_SUMMARY_BUDGET = 100000
+    DEFAULT_COPILOT_BUDGET = 12000
+    DEFAULT_SUMMARY_BUDGET = 200000
 
     def __init__(self, provider: BaseLLMProvider):
         self.provider = provider
@@ -260,7 +260,7 @@ class LLMClient:
         # For large-context models (128K+ tokens), allow up to 500K chars
         # to capture full meeting transcripts without truncation.
         summary_budget = min(available_chars, 500000)
-        copilot_budget = min(summary_budget // 2, 30000)
+        copilot_budget = min(summary_budget // 2, 60000)
 
         copilot_budget = max(copilot_budget, 1000)
         summary_budget = max(summary_budget, 2000)

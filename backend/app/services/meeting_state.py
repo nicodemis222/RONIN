@@ -62,11 +62,38 @@ class MeetingSession:
             return ""
         if minutes is None:
             minutes = settings.transcript_window_minutes
-        # Use the last N segments as a rough proxy (each ~2-3 seconds)
-        segments_per_minute = 20  # ~3 seconds per segment
-        count = int(minutes * segments_per_minute)
-        recent = self.transcript_segments[-count:]
+
+        # Use actual timestamps to compute the window.
+        # Segments have timestamps like "HH:MM:SS". Parse the latest one
+        # and walk backwards to find the cutoff.
+        latest = self.transcript_segments[-1]
+        latest_secs = self._parse_timestamp_secs(latest.timestamp)
+
+        if latest_secs is not None:
+            cutoff_secs = latest_secs - (minutes * 60)
+            recent = []
+            for s in reversed(self.transcript_segments):
+                t = self._parse_timestamp_secs(s.timestamp)
+                if t is not None and t < cutoff_secs:
+                    break
+                recent.append(s)
+            recent.reverse()
+        else:
+            # Fallback: rough estimate if timestamps can't be parsed
+            segments_per_minute = 20
+            count = int(minutes * segments_per_minute)
+            recent = self.transcript_segments[-count:]
+
         return "\n".join(self._format_segment(s) for s in recent)
+
+    @staticmethod
+    def _parse_timestamp_secs(ts: str) -> float | None:
+        """Parse 'HH:MM:SS' timestamp to seconds since midnight."""
+        try:
+            parts = ts.split(":")
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        except (ValueError, IndexError):
+            return None
 
 
 class MeetingStateManager:

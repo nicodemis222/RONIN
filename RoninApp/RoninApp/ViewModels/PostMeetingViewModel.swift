@@ -237,7 +237,7 @@ class PostMeetingViewModel: ObservableObject {
             case .csv:
                 try buildCSV(summary: summary).write(to: url, atomically: true, encoding: .utf8)
             case .docx:
-                try buildDocxXML(summary: summary).write(to: url, atomically: true, encoding: .utf8)
+                try buildDocxArchive(summary: summary, to: url)
             }
             showSuccess("Exported to \(url.lastPathComponent)")
         } catch {
@@ -465,50 +465,40 @@ class PostMeetingViewModel: ObservableObject {
         return field
     }
 
-    // MARK: - DOCX Export (WordprocessingML XML)
+    // MARK: - DOCX Export (OOXML ZIP archive)
 
-    private func buildDocxXML(summary: MeetingSummaryResponse) -> String {
-        // Generate a flat XML WordprocessingML document.
-        // Word, Pages, and LibreOffice can open this directly as .docx.
+    /// Build a proper .docx file (OOXML ZIP archive) that opens in Word, Pages, and Google Docs.
+    private func buildDocxArchive(summary: MeetingSummaryResponse, to url: URL) throws {
         let participants = extractParticipants()
 
+        // Build the document.xml body
         var body = ""
-
-        // Title
         body += wordParagraph(meetingTitle, style: "Heading1")
         body += wordParagraph("Meeting Summary", style: "Heading2")
         body += wordParagraph("Date: \(meetingDateString)")
         body += wordParagraph("")
 
-        // Executive Summary
         body += wordParagraph("Executive Summary", style: "Heading2")
         for paragraph in summary.executive_summary.components(separatedBy: "\n") where !paragraph.isEmpty {
             body += wordParagraph(paragraph)
         }
         body += wordParagraph("")
 
-        // Participants
         if !participants.isEmpty {
             body += wordParagraph("Participants", style: "Heading2")
-            for p in participants {
-                body += wordListItem(p)
-            }
+            for p in participants { body += wordListItem(p) }
             body += wordParagraph("")
         }
 
-        // Key Decisions
         if !summary.decisions.isEmpty {
             body += wordParagraph("Key Decisions", style: "Heading2")
             for (i, d) in summary.decisions.enumerated() {
                 body += wordParagraph("\(i + 1). \(d.decision)", bold: true)
-                if !d.context.isEmpty {
-                    body += wordParagraph("    Context: \(d.context)")
-                }
+                if !d.context.isEmpty { body += wordParagraph("    Context: \(d.context)") }
             }
             body += wordParagraph("")
         }
 
-        // Action Items
         if !summary.action_items.isEmpty {
             body += wordParagraph("Action Items", style: "Heading2")
             for (i, item) in summary.action_items.enumerated() {
@@ -520,16 +510,12 @@ class PostMeetingViewModel: ObservableObject {
             body += wordParagraph("")
         }
 
-        // Open Questions
         if !summary.unresolved.isEmpty {
             body += wordParagraph("Open Questions", style: "Heading2")
-            for q in summary.unresolved {
-                body += wordListItem(q)
-            }
+            for q in summary.unresolved { body += wordListItem(q) }
             body += wordParagraph("")
         }
 
-        // Appendix: Full Transcript
         if !fullTranscript.isEmpty {
             body += wordParagraph("")
             body += wordParagraph("Appendix: Full Meeting Transcript", style: "Heading2")
@@ -538,14 +524,64 @@ class PostMeetingViewModel: ObservableObject {
             }
         }
 
-        return """
-        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <?mso-application progid="Word.Document"?>
-        <w:wordDocument xmlns:w="http://schemas.microsoft.com/office/word/2003/wordml"
-                        xmlns:wx="http://schemas.microsoft.com/office/word/2003/auxHint">
-        <w:body>\(body)</w:body>
-        </w:wordDocument>
-        """
+        // Assemble OOXML parts into a temp directory, then zip
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ronin-docx-\(UUID().uuidString)")
+        let wordDir = tmpDir.appendingPathComponent("word")
+        let relsRoot = tmpDir.appendingPathComponent("_rels")
+        let relsWord = wordDir.appendingPathComponent("_rels")
+
+        try FileManager.default.createDirectory(at: relsWord, withIntermediateDirectories: true)
+
+        // [Content_Types].xml
+        try DocxTemplates.contentTypes
+            .write(to: tmpDir.appendingPathComponent("[Content_Types].xml"), atomically: true, encoding: .utf8)
+
+        // _rels/.rels
+        try DocxTemplates.rootRels
+            .write(to: relsRoot.appendingPathComponent(".rels"), atomically: true, encoding: .utf8)
+
+        // word/_rels/document.xml.rels
+        try DocxTemplates.documentRels
+            .write(to: relsWord.appendingPathComponent("document.xml.rels"), atomically: true, encoding: .utf8)
+
+        // word/styles.xml
+        try DocxTemplates.styles
+            .write(to: wordDir.appendingPathComponent("styles.xml"), atomically: true, encoding: .utf8)
+
+        // word/document.xml
+        let documentXML = DocxTemplates.document(body: body)
+        try documentXML
+            .write(to: wordDir.appendingPathComponent("document.xml"), atomically: true, encoding: .utf8)
+
+        // Create ZIP using /usr/bin/ditto
+        // ditto -c -k creates a proper ZIP archive from a directory
+        let zipURL = tmpDir.appendingPathExtension("docx")
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        proc.arguments = ["-c", "-k", "--sequesterRsrc", tmpDir.path, zipURL.path]
+        proc.standardOutput = FileHandle.nullDevice
+        proc.standardError = FileHandle.nullDevice
+        try proc.run()
+        proc.waitUntilExit()
+
+        guard proc.terminationStatus == 0 else {
+            throw ExportError.docxCreationFailed
+        }
+
+        // Move to final destination
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+        try FileManager.default.moveItem(at: zipURL, to: url)
+
+        // Clean up temp directory
+        try? FileManager.default.removeItem(at: tmpDir)
+    }
+
+    enum ExportError: LocalizedError {
+        case docxCreationFailed
+        var errorDescription: String? { "Failed to create DOCX archive" }
     }
 
     private func wordParagraph(_ text: String, style: String? = nil, bold: Bool = false) -> String {
@@ -571,6 +607,61 @@ class PostMeetingViewModel: ObservableObject {
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
+    }
+
+    // MARK: - OOXML Templates
+
+    /// Minimal OOXML templates for a valid .docx file.
+    private enum DocxTemplates {
+        static let contentTypes = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+          <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+          <Default Extension="xml" ContentType="application/xml"/>
+          <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+          <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+        </Types>
+        """
+
+        static let rootRels = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+        </Relationships>
+        """
+
+        static let documentRels = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+        </Relationships>
+        """
+
+        static let styles = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:style w:type="paragraph" w:styleId="Heading1">
+            <w:name w:val="heading 1"/>
+            <w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>
+            <w:rPr><w:b/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr>
+          </w:style>
+          <w:style w:type="paragraph" w:styleId="Heading2">
+            <w:name w:val="heading 2"/>
+            <w:pPr><w:spacing w:before="200" w:after="80"/></w:pPr>
+            <w:rPr><w:b/><w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr>
+          </w:style>
+        </w:styles>
+        """
+
+        static func document(body: String) -> String {
+            """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <w:body>\(body)</w:body>
+            </w:document>
+            """
+        }
     }
 
     // MARK: - Transcript Formatting
