@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 @MainActor
 class PostMeetingViewModel: ObservableObject {
@@ -36,6 +37,40 @@ class PostMeetingViewModel: ObservableObject {
             case .analyzing: return 0.15
             case .extracting: return 0.55
             case .formatting: return 0.80
+            }
+        }
+    }
+
+    enum ExportFormat: String, CaseIterable {
+        case markdown = "Markdown (.md)"
+        case plainText = "Plain Text (.txt)"
+        case csv = "CSV (.csv)"
+        case docx = "Word (.docx)"
+
+        var fileExtension: String {
+            switch self {
+            case .markdown: return "md"
+            case .plainText: return "txt"
+            case .csv: return "csv"
+            case .docx: return "docx"
+            }
+        }
+
+        var contentType: UTType {
+            switch self {
+            case .markdown: return .plainText
+            case .plainText: return .plainText
+            case .csv: return .commaSeparatedText
+            case .docx: return UTType("org.openxmlformats.wordprocessingml.document") ?? .data
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .markdown: return "doc.richtext"
+            case .plainText: return "doc.text"
+            case .csv: return "tablecells"
+            case .docx: return "doc.fill"
             }
         }
     }
@@ -153,104 +188,407 @@ class PostMeetingViewModel: ObservableObject {
         return max(phaseBase, rawProgress)
     }
 
+    // MARK: - Participants
+
+    /// Extract unique speaker labels from the transcript.
+    func extractParticipants() -> [String] {
+        let lines = fullTranscript.components(separatedBy: "\n")
+        var seen = Set<String>()
+        var ordered: [String] = []
+
+        for line in lines {
+            if let speaker = extractSpeaker(from: line), !seen.contains(speaker) {
+                seen.insert(speaker)
+                ordered.append(speaker)
+            }
+        }
+        return ordered
+    }
+
+    // MARK: - Meeting Date
+
+    private var meetingDateString: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.timeStyle = .short
+        return formatter.string(from: Date())
+    }
+
     // MARK: - Export
 
-    func exportMarkdown() {
+    func exportFile(format: ExportFormat) {
         guard let summary = summary else { return }
 
+        let slug = meetingTitle.replacingOccurrences(of: " ", with: "-")
+        let filename = "\(slug)-summary.\(format.fileExtension)"
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [format.contentType]
+        panel.nameFieldStringValue = filename
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            switch format {
+            case .markdown:
+                try buildMarkdown(summary: summary).write(to: url, atomically: true, encoding: .utf8)
+            case .plainText:
+                try buildPlainText(summary: summary).write(to: url, atomically: true, encoding: .utf8)
+            case .csv:
+                try buildCSV(summary: summary).write(to: url, atomically: true, encoding: .utf8)
+            case .docx:
+                try buildDocxXML(summary: summary).write(to: url, atomically: true, encoding: .utf8)
+            }
+            showSuccess("Exported to \(url.lastPathComponent)")
+        } catch {
+            errorMessage = "Failed to save file: \(error.localizedDescription)"
+        }
+    }
+
+    func copyToClipboard() {
+        guard let summary = summary else { return }
+        let text = buildPlainText(summary: summary)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        showSuccess("Copied to clipboard")
+    }
+
+    // MARK: - Markdown Export
+
+    private func buildMarkdown(summary: MeetingSummaryResponse) -> String {
+        let participants = extractParticipants()
         var md = "# \(meetingTitle) - Meeting Summary\n\n"
-        md += "## Summary\n\(summary.executive_summary)\n\n"
+        md += "**Date:** \(meetingDateString)\n\n"
 
+        md += "---\n\n"
+
+        // Executive Summary
+        md += "## Executive Summary\n\n"
+        md += "\(summary.executive_summary)\n\n"
+
+        // Participants
+        if !participants.isEmpty {
+            md += "## Participants\n\n"
+            for p in participants {
+                md += "- \(p)\n"
+            }
+            md += "\n"
+        }
+
+        // Key Decisions
         if !summary.decisions.isEmpty {
-            md += "## Decisions\n"
-            for d in summary.decisions {
-                md += "- **\(d.decision)**: \(d.context)\n"
+            md += "## Key Decisions\n\n"
+            for (i, d) in summary.decisions.enumerated() {
+                md += "\(i + 1). **\(d.decision)**"
+                if !d.context.isEmpty {
+                    md += "\n   - _Context:_ \(d.context)"
+                }
+                md += "\n\n"
             }
-            md += "\n"
         }
 
+        // Action Items
         if !summary.action_items.isEmpty {
-            md += "## Action Items\n"
-            for item in summary.action_items {
-                var line = "- [ ] \(item.action)"
-                if !item.assignee.isEmpty { line += " (@\(item.assignee))" }
-                if !item.deadline.isEmpty { line += " — due: \(item.deadline)" }
-                md += line + "\n"
+            md += "## Action Items\n\n"
+            md += "| # | Action | Assignee | Deadline |\n"
+            md += "|---|--------|----------|----------|\n"
+            for (i, item) in summary.action_items.enumerated() {
+                let assignee = item.assignee.isEmpty ? "—" : item.assignee
+                let deadline = item.deadline.isEmpty ? "—" : item.deadline
+                md += "| \(i + 1) | \(item.action) | \(assignee) | \(deadline) |\n"
             }
             md += "\n"
         }
 
+        // Open Questions
         if !summary.unresolved.isEmpty {
-            md += "## Open Questions\n"
+            md += "## Open Questions\n\n"
             for q in summary.unresolved {
                 md += "- \(q)\n"
             }
             md += "\n"
         }
 
+        // Appendix: Full Transcript
         if !fullTranscript.isEmpty {
-            md += formatTranscriptForExport()
+            md += "---\n\n"
+            md += "## Appendix: Full Meeting Transcript\n\n"
+            md += formatTranscriptForMarkdown()
         }
 
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.plainText]
-        panel.nameFieldStringValue = "\(meetingTitle.replacingOccurrences(of: " ", with: "-"))-summary.md"
-
-        if panel.runModal() == .OK, let url = panel.url {
-            do {
-                try md.write(to: url, atomically: true, encoding: .utf8)
-                showSuccess("Exported to \(url.lastPathComponent)")
-            } catch {
-                errorMessage = "Failed to save file: \(error.localizedDescription)"
-            }
-        }
+        return md
     }
 
-    func copyToClipboard() {
-        guard let summary = summary else { return }
-        var text = "Summary: \(summary.executive_summary)"
+    // MARK: - Plain Text Export
 
+    private func buildPlainText(summary: MeetingSummaryResponse) -> String {
+        let participants = extractParticipants()
+        let separator = String(repeating: "=", count: 60)
+        let thinSep = String(repeating: "-", count: 60)
+        var text = ""
+
+        text += "\(meetingTitle.uppercased()) - MEETING SUMMARY\n"
+        text += "Date: \(meetingDateString)\n"
+        text += "\(separator)\n\n"
+
+        // Executive Summary
+        text += "EXECUTIVE SUMMARY\n"
+        text += "\(thinSep)\n"
+        text += "\(summary.executive_summary)\n\n"
+
+        // Participants
+        if !participants.isEmpty {
+            text += "PARTICIPANTS\n"
+            text += "\(thinSep)\n"
+            for p in participants {
+                text += "  - \(p)\n"
+            }
+            text += "\n"
+        }
+
+        // Key Decisions
         if !summary.decisions.isEmpty {
-            text += "\n\nDecisions:\n"
-            text += summary.decisions.map { "- \($0.decision)" }.joined(separator: "\n")
+            text += "KEY DECISIONS\n"
+            text += "\(thinSep)\n"
+            for (i, d) in summary.decisions.enumerated() {
+                text += "  \(i + 1). \(d.decision)\n"
+                if !d.context.isEmpty {
+                    text += "     Context: \(d.context)\n"
+                }
+            }
+            text += "\n"
         }
 
+        // Action Items
         if !summary.action_items.isEmpty {
-            text += "\n\nAction Items:\n"
-            text += summary.action_items.map { "- \($0.action)" }.joined(separator: "\n")
+            text += "ACTION ITEMS\n"
+            text += "\(thinSep)\n"
+            for (i, item) in summary.action_items.enumerated() {
+                text += "  \(i + 1). \(item.action)\n"
+                if !item.assignee.isEmpty {
+                    text += "     Assignee: \(item.assignee)\n"
+                }
+                if !item.deadline.isEmpty {
+                    text += "     Deadline: \(item.deadline)\n"
+                }
+            }
+            text += "\n"
         }
 
+        // Open Questions
         if !summary.unresolved.isEmpty {
-            text += "\n\nOpen Questions:\n"
-            text += summary.unresolved.map { "- \($0)" }.joined(separator: "\n")
+            text += "OPEN QUESTIONS\n"
+            text += "\(thinSep)\n"
+            for q in summary.unresolved {
+                text += "  - \(q)\n"
+            }
+            text += "\n"
         }
 
+        // Appendix: Full Transcript
         if !fullTranscript.isEmpty {
-            text += "\n\n" + formatTranscriptForExport()
+            text += "\(separator)\n"
+            text += "APPENDIX: FULL MEETING TRANSCRIPT\n"
+            text += "\(separator)\n\n"
+            text += fullTranscript
+            text += "\n"
         }
 
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        showSuccess("Copied to clipboard")
+        return text
+    }
+
+    // MARK: - CSV Export
+
+    private func buildCSV(summary: MeetingSummaryResponse) -> String {
+        var csv = ""
+
+        // Meeting info
+        csv += "Meeting Summary\n"
+        csv += csvRow(["Title", meetingTitle])
+        csv += csvRow(["Date", meetingDateString])
+        csv += "\n"
+
+        // Executive Summary
+        csv += csvRow(["Executive Summary"])
+        csv += csvRow([summary.executive_summary])
+        csv += "\n"
+
+        // Participants
+        let participants = extractParticipants()
+        if !participants.isEmpty {
+            csv += csvRow(["Participants"])
+            for p in participants {
+                csv += csvRow([p])
+            }
+            csv += "\n"
+        }
+
+        // Key Decisions
+        if !summary.decisions.isEmpty {
+            csv += csvRow(["Key Decisions"])
+            csv += csvRow(["#", "Decision", "Context"])
+            for (i, d) in summary.decisions.enumerated() {
+                csv += csvRow(["\(i + 1)", d.decision, d.context])
+            }
+            csv += "\n"
+        }
+
+        // Action Items
+        if !summary.action_items.isEmpty {
+            csv += csvRow(["Action Items"])
+            csv += csvRow(["#", "Action", "Assignee", "Deadline"])
+            for (i, item) in summary.action_items.enumerated() {
+                csv += csvRow(["\(i + 1)", item.action, item.assignee, item.deadline])
+            }
+            csv += "\n"
+        }
+
+        // Open Questions
+        if !summary.unresolved.isEmpty {
+            csv += csvRow(["Open Questions"])
+            for q in summary.unresolved {
+                csv += csvRow([q])
+            }
+        }
+
+        return csv
+    }
+
+    private func csvRow(_ fields: [String]) -> String {
+        fields.map { csvEscape($0) }.joined(separator: ",") + "\n"
+    }
+
+    private func csvEscape(_ field: String) -> String {
+        if field.contains(",") || field.contains("\"") || field.contains("\n") {
+            return "\"" + field.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+        return field
+    }
+
+    // MARK: - DOCX Export (WordprocessingML XML)
+
+    private func buildDocxXML(summary: MeetingSummaryResponse) -> String {
+        // Generate a flat XML WordprocessingML document.
+        // Word, Pages, and LibreOffice can open this directly as .docx.
+        let participants = extractParticipants()
+
+        var body = ""
+
+        // Title
+        body += wordParagraph(meetingTitle, style: "Heading1")
+        body += wordParagraph("Meeting Summary", style: "Heading2")
+        body += wordParagraph("Date: \(meetingDateString)")
+        body += wordParagraph("")
+
+        // Executive Summary
+        body += wordParagraph("Executive Summary", style: "Heading2")
+        for paragraph in summary.executive_summary.components(separatedBy: "\n") where !paragraph.isEmpty {
+            body += wordParagraph(paragraph)
+        }
+        body += wordParagraph("")
+
+        // Participants
+        if !participants.isEmpty {
+            body += wordParagraph("Participants", style: "Heading2")
+            for p in participants {
+                body += wordListItem(p)
+            }
+            body += wordParagraph("")
+        }
+
+        // Key Decisions
+        if !summary.decisions.isEmpty {
+            body += wordParagraph("Key Decisions", style: "Heading2")
+            for (i, d) in summary.decisions.enumerated() {
+                body += wordParagraph("\(i + 1). \(d.decision)", bold: true)
+                if !d.context.isEmpty {
+                    body += wordParagraph("    Context: \(d.context)")
+                }
+            }
+            body += wordParagraph("")
+        }
+
+        // Action Items
+        if !summary.action_items.isEmpty {
+            body += wordParagraph("Action Items", style: "Heading2")
+            for (i, item) in summary.action_items.enumerated() {
+                var line = "\(i + 1). \(item.action)"
+                if !item.assignee.isEmpty { line += " [Assignee: \(item.assignee)]" }
+                if !item.deadline.isEmpty { line += " [Deadline: \(item.deadline)]" }
+                body += wordParagraph(line)
+            }
+            body += wordParagraph("")
+        }
+
+        // Open Questions
+        if !summary.unresolved.isEmpty {
+            body += wordParagraph("Open Questions", style: "Heading2")
+            for q in summary.unresolved {
+                body += wordListItem(q)
+            }
+            body += wordParagraph("")
+        }
+
+        // Appendix: Full Transcript
+        if !fullTranscript.isEmpty {
+            body += wordParagraph("")
+            body += wordParagraph("Appendix: Full Meeting Transcript", style: "Heading2")
+            for line in fullTranscript.components(separatedBy: "\n") {
+                body += wordParagraph(line)
+            }
+        }
+
+        return """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <?mso-application progid="Word.Document"?>
+        <w:wordDocument xmlns:w="http://schemas.microsoft.com/office/word/2003/wordml"
+                        xmlns:wx="http://schemas.microsoft.com/office/word/2003/auxHint">
+        <w:body>\(body)</w:body>
+        </w:wordDocument>
+        """
+    }
+
+    private func wordParagraph(_ text: String, style: String? = nil, bold: Bool = false) -> String {
+        let escaped = xmlEscape(text)
+        var pPr = ""
+        if let style {
+            pPr += "<w:pStyle w:val=\"\(style)\"/>"
+        }
+        var rPr = ""
+        if bold {
+            rPr = "<w:rPr><w:b/></w:rPr>"
+        }
+        let pPrBlock = pPr.isEmpty ? "" : "<w:pPr>\(pPr)</w:pPr>"
+        return "<w:p>\(pPrBlock)<w:r>\(rPr)<w:t xml:space=\"preserve\">\(escaped)</w:t></w:r></w:p>"
+    }
+
+    private func wordListItem(_ text: String) -> String {
+        wordParagraph("- \(text)")
+    }
+
+    private func xmlEscape(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
     // MARK: - Transcript Formatting
 
-    /// Format the full transcript with speaker breakout headers.
+    /// Format the full transcript with speaker breakout headers for Markdown.
     /// Input lines look like: "[07:11:54] Speaker 1: they put in Comedie..."
     /// Output groups consecutive lines under speaker headers.
-    private func formatTranscriptForExport() -> String {
+    private func formatTranscriptForMarkdown() -> String {
         let lines = fullTranscript.components(separatedBy: "\n")
 
         // Check if any line has speaker labels
         let hasSpeakers = lines.contains { extractSpeaker(from: $0) != nil }
 
         if !hasSpeakers {
-            // No speaker labels — plain transcript
-            return "## Full Transcript\n\n\(fullTranscript)\n"
+            return "\(fullTranscript)\n"
         }
 
-        var md = "## Full Transcript\n\n"
+        var md = ""
         var currentSpeaker: String?
 
         for line in lines where !line.isEmpty {

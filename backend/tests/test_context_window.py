@@ -266,9 +266,10 @@ def test_budget_calibration():
         (4096,  {"copilot": 5734, "summary": 11468}),
         (8192,  {"copilot": 11468, "summary": 22936}),
         (16384, {"copilot": 22936, "summary": 45872}),
-        (32768, {"copilot": 30000, "summary": 60000}),  # capped
-        (65536, {"copilot": 30000, "summary": 60000}),  # capped
-        (131072, {"copilot": 30000, "summary": 60000}), # capped
+        (32768, {"copilot": 30000, "summary": int(int(32768 * 0.7) * 4)}),
+        (65536, {"copilot": 30000, "summary": int(int(65536 * 0.7) * 4)}),
+        (131072, {"copilot": 30000, "summary": int(int(131072 * 0.7) * 4)}),
+        (200000, {"copilot": 30000, "summary": 500000}), # capped at 500K
     ]
 
     logger.info(f"\n{'='*60}")
@@ -454,7 +455,7 @@ async def test_detect_context_length():
     # Verify budgets are reasonable
     assert copilot_budget > 0, "Copilot budget should be positive"
     assert summary_budget > copilot_budget, "Summary budget should exceed copilot budget"
-    assert summary_budget <= 60000, "Summary budget should have a sane upper bound"
+    assert summary_budget <= 500000, "Summary budget should have a sane upper bound"
 
     await llm.close()
 

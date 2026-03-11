@@ -222,7 +222,7 @@ class LLMClient:
     """
 
     DEFAULT_COPILOT_BUDGET = 6000
-    DEFAULT_SUMMARY_BUDGET = 12000
+    DEFAULT_SUMMARY_BUDGET = 100000
 
     def __init__(self, provider: BaseLLMProvider):
         self.provider = provider
@@ -247,7 +247,9 @@ class LLMClient:
     def _calibrate_budgets(n_ctx: int) -> tuple[int, int]:
         """Calculate transcript char budgets from the model's context length.
 
-        Heuristic: ~4 chars per token, reserve ~30% for system prompt + notes + output.
+        Heuristic: ~4 chars per token, reserve ~20% for system prompt + notes,
+        ~10% for output tokens. Send as much transcript as possible to avoid
+        losing decisions and action items from truncation.
         Copilot budget is ~half of summary (copilot only needs recent context).
 
         Returns (copilot_budget, summary_budget).
@@ -255,7 +257,9 @@ class LLMClient:
         available_tokens = int(n_ctx * 0.7)
         available_chars = available_tokens * 4
 
-        summary_budget = min(available_chars, 60000)
+        # For large-context models (128K+ tokens), allow up to 500K chars
+        # to capture full meeting transcripts without truncation.
+        summary_budget = min(available_chars, 500000)
         copilot_budget = min(summary_budget // 2, 30000)
 
         copilot_budget = max(copilot_budget, 1000)
@@ -333,7 +337,7 @@ class LLMClient:
             )
             try:
                 content = await self.provider.chat_completion(
-                    messages, temperature=0.3, max_tokens=4000
+                    messages, temperature=0.3, max_tokens=8000
                 )
                 data = _extract_json(content)
                 data = _normalize_summary(data)

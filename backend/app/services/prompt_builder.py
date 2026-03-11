@@ -207,7 +207,7 @@ class PromptBuilder:
 
     def build_summary_prompt(
         self, transcript: str, config, notes: str,
-        max_transcript_chars: int = 12000,
+        max_transcript_chars: int = 100000,
         suppress_thinking: bool = True,
     ) -> list[dict]:
         system = SUMMARY_SYSTEM_PROMPT.format(

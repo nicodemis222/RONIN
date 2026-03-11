@@ -106,16 +106,39 @@ struct PostMeetingView: View {
                             }
 
                             // Export hint
-                            Text("Export includes summary, decisions, action items, and the full transcript.")
+                            Text("Export includes summary, participants, decisions, action items, and the full transcript.")
                                 .font(.matrixCaption)
                                 .foregroundColor(.matrixFaded)
 
                             HStack(spacing: 12) {
-                                Button("Export Full Markdown") {
-                                    viewModel.exportMarkdown()
+                                Menu {
+                                    ForEach(PostMeetingViewModel.ExportFormat.allCases, id: \.self) { format in
+                                        Button {
+                                            viewModel.exportFile(format: format)
+                                        } label: {
+                                            Label(format.rawValue, systemImage: format.icon)
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "square.and.arrow.up")
+                                        Text("Export")
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 9))
+                                    }
                                 }
-                                .buttonStyle(MatrixPrimaryButtonStyle())
-                                .help("Save summary + full transcript as a Markdown file")
+                                .menuStyle(.borderlessButton)
+                                .fixedSize()
+                                .font(.matrixBody)
+                                .foregroundColor(.matrixBlack)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.matrixBright)
+                                )
+                                .shadow(color: Color.matrixGlow.opacity(0.4), radius: 8)
+                                .help("Export summary + full transcript")
 
                                 Button("Copy All to Clipboard") {
                                     viewModel.copyToClipboard()

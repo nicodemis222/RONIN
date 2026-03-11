@@ -71,8 +71,9 @@ class NativeCopilotService: ObservableObject {
     private let debounceInterval: TimeInterval = 10.0
 
     // Budget defaults for Foundation Models (~4096-token context window)
+    // Summary gets a larger budget to capture more decisions/action items
     var copilotBudget: Int = 2400
-    var summaryBudget: Int = 1800
+    var summaryBudget: Int = 3200
 
     // MARK: - Setup
 
@@ -89,7 +90,7 @@ class NativeCopilotService: ObservableObject {
         isConfigured = true
         providerName = "Apple Intelligence"
         copilotBudget = 2400
-        summaryBudget = 1800
+        summaryBudget = 3200
         logger.info("Configured with Apple Foundation Models provider (on-device)")
         return true
     }

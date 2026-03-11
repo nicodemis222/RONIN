@@ -163,6 +163,21 @@ struct LLMSettingsTab: View {
                             Text("Requires LM Studio running with a loaded model")
                                 .font(.matrixCaption)
                                 .foregroundColor(.matrixFaded)
+
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundColor(.matrixCyan)
+                                Text("For best results, set your model's context length to at least 32K tokens in LM Studio (covers meetings up to ~1 hour). For 2-3 hour meetings, use 128K+ or switch to Anthropic/OpenAI.")
+                                    .font(.matrixCaption)
+                                    .foregroundColor(.matrixCyan)
+                            }
+                            .padding(8)
+                            .background(Color.matrixCyan.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.matrixCyan.opacity(0.25), lineWidth: 1)
+                            )
                         }
 
                     case .openai:
@@ -204,6 +219,21 @@ struct LLMSettingsTab: View {
                             Text("No configuration needed. Apple Intelligence runs entirely on-device.")
                                 .font(.matrixCaption)
                                 .foregroundColor(.matrixDim)
+
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundColor(.matrixCyan)
+                                Text("On-device model has a small context window (~4K tokens). Summaries for meetings longer than ~5 minutes will be generated from a truncated transcript. For comprehensive summaries of long meetings, use Anthropic or OpenAI.")
+                                    .font(.matrixCaption)
+                                    .foregroundColor(.matrixCyan)
+                            }
+                            .padding(8)
+                            .background(Color.matrixCyan.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.matrixCyan.opacity(0.25), lineWidth: 1)
+                            )
                         }
                     }
                 }
