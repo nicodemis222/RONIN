@@ -50,6 +50,21 @@ struct GenerableCopilotResponse {
     var facts_from_notes: [GenerableNoteFact]
 }
 
+// MARK: - Chunk Extraction (Map Phase for Long Transcripts)
+
+@available(macOS 26, *)
+@Generable
+struct GenerableChunkExtraction {
+    @Guide(description: "3-5 key points or topics discussed in this portion of the meeting")
+    var key_points: [String]
+    @Guide(description: "Decisions made in this portion")
+    var decisions: [GenerableDecision]
+    @Guide(description: "Action items from this portion")
+    var action_items: [GenerableActionItem]
+    @Guide(description: "Unresolved questions or open issues from this portion")
+    var unresolved: [String]
+}
+
 // MARK: - Summary Response Types
 
 @available(macOS 26, *)

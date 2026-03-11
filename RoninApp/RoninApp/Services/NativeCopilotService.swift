@@ -55,6 +55,8 @@ enum NativeCopilotError: LocalizedError, Equatable {
 
 /// Coordinates on-device AI calls via Apple Foundation Models.
 /// Handles debounce, in-flight guards, and context overflow retry logic.
+/// Summary generation uses chunked map-reduce to process full transcripts
+/// despite the ~4096-token context window.
 @MainActor
 class NativeCopilotService: ObservableObject {
 
@@ -70,10 +72,11 @@ class NativeCopilotService: ObservableObject {
 
     private let debounceInterval: TimeInterval = 10.0
 
-    // Budget defaults for Foundation Models (~4096-token context window)
-    // Summary gets a larger budget to capture more decisions/action items
-    var copilotBudget: Int = 4800
-    var summaryBudget: Int = 6400
+    // Budget for real-time copilot responses.
+    // ~4096 tokens total, ~80 tokens instructions, ~600 tokens output
+    // → ~3400 tokens ≈ 12,000 chars for user prompt (meeting info + transcript).
+    // Copilot prompt overhead (title/goal/notes) ≈ 500 chars, leaving ~11,500 for transcript.
+    var copilotBudget: Int = 10_000
 
     // MARK: - Setup
 
@@ -89,8 +92,6 @@ class NativeCopilotService: ObservableObject {
 
         isConfigured = true
         providerName = "Apple Intelligence"
-        copilotBudget = 2400
-        summaryBudget = 3200
         logger.info("Configured with Apple Foundation Models provider (on-device)")
         return true
     }
@@ -140,7 +141,11 @@ class NativeCopilotService: ObservableObject {
         throw NativeCopilotError.contextTooSmall
     }
 
-    // MARK: - Summary
+    // MARK: - Summary (Chunked Map-Reduce)
+    //
+    // The FoundationModelsProvider handles chunking internally.
+    // No budget-halving retry needed — the provider splits any transcript
+    // into chunks that fit the context window and aggregates the results.
 
     func generateSummary(
         transcript: String,
@@ -149,24 +154,11 @@ class NativeCopilotService: ObservableObject {
     ) async throws -> MeetingSummaryResponse {
         guard isConfigured else { throw NativeCopilotError.noProvider }
 
-        // Context overflow retry: halve budget up to 3 times
-        var maxChars = summaryBudget
-        for attempt in 0..<3 {
-            do {
-                return try await _callSummary(
-                    transcript: transcript,
-                    config: config,
-                    notes: notes,
-                    budget: maxChars
-                )
-            } catch NativeCopilotError.contextOverflow {
-                maxChars /= 2
-                if maxChars < 200 { throw NativeCopilotError.contextTooSmall }
-                logger.warning("Context overflow — retrying with budget \(maxChars) (attempt \(attempt + 2)/3)")
-            }
-        }
-
-        throw NativeCopilotError.contextTooSmall
+        return try await _callSummary(
+            transcript: transcript,
+            config: config,
+            notes: notes
+        )
     }
 
     // MARK: - Private Helpers
@@ -194,17 +186,18 @@ class NativeCopilotService: ObservableObject {
     private func _callSummary(
         transcript: String,
         config: MeetingConfig,
-        notes: String,
-        budget: Int
+        notes: String
     ) async throws -> MeetingSummaryResponse {
         #if canImport(FoundationModels)
         if #available(macOS 26, *) {
             let provider = FoundationModelsProvider()
+            // Budget param kept for API compatibility but chunking
+            // is now handled internally by FoundationModelsProvider
             return try await provider.generateSummary(
                 transcript: transcript,
                 config: config,
                 notes: notes,
-                budget: budget
+                budget: 0
             )
         }
         #endif

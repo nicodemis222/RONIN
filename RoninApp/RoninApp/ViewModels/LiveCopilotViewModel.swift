@@ -280,8 +280,9 @@ class LiveCopilotViewModel: ObservableObject {
         guard let service = nativeCopilotService,
               let config = meetingConfig else { return }
 
-        // Collect recent transcript (~1.5 minutes worth, ~20 segments/minute)
-        let recentCount = min(transcriptSegments.count, 60)
+        // Collect recent transcript (~5 minutes worth, ~20 segments/minute).
+        // NativeCopilotService truncates to its copilotBudget (~10K chars).
+        let recentCount = min(transcriptSegments.count, 100)
         let recentSegments = transcriptSegments.suffix(recentCount)
         let transcriptWindow = recentSegments.map { $0.text }.joined(separator: "\n")
 
