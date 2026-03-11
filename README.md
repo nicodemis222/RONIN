@@ -2,7 +2,7 @@
 
 A local-first meeting copilot for macOS. Real-time transcription, AI-powered suggestions, and post-meeting summaries — with four LLM provider options including fully on-device Apple Intelligence.
 
-![Version](https://img.shields.io/badge/version-1.5.0-00FF41)
+![Version](https://img.shields.io/badge/version-1.5.3-00FF41)
 ![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple&logoColor=00FF41)
 ![Swift](https://img.shields.io/badge/Swift-5.10-00FF41?logo=swift&logoColor=00FF41)
 ![Python](https://img.shields.io/badge/Python-3.13%2B-00FF41?logo=python&logoColor=00FF41)
@@ -188,7 +188,7 @@ RONIN opens a resizable floating overlay window with three panels. Drag the divi
 
 | Panel | Content |
 |---|---|
-| **Transcript** | Streaming speech-to-text — text grows word-by-word as each person speaks, then locks in when they pause. No duplication. |
+| **Transcript** | Full conversation history from start to finish — text grows word-by-word as each person speaks (typewriter effect), then locks in when they pause. Auto-scrolls to latest with "Jump to latest" button when scrolled away. No duplication. |
 | **Responses** | 2-3 tone-varied suggested replies you can copy with one click. All responses are preserved as scrollable history — newest at the bottom with auto-scroll, older responses above with timestamp separators. |
 | **Guidance** | Follow-up questions, risk alerts, and relevant facts from your notes. Full history preserved with the same auto-scroll behavior as Responses. |
 
@@ -213,6 +213,8 @@ Click **End Meeting** to generate a structured summary. A progress bar shows the
 
 Export options: **Markdown** (`.md`), **Word** (`.docx`), or **Copy All to Clipboard**. All formats include the summary, decisions, action items, and the complete transcript with speaker labels.
 
+> **Transcript reliability**: RONIN preserves every word of continuous speech, even during long uninterrupted segments. Audio arriving while Whisper processes is buffered and carried forward — nothing is silently lost between transcription cycles. Forced commits at 85% buffer capacity prevent text loss from sustained speech, and a flush-then-export sequence ensures the final transcript includes all audio received up to meeting end.
+
 > **Safety**: The full transcript is saved to `~/Library/Logs/Ronin/transcripts/` before the LLM is called. Even if summary generation fails, your transcript is preserved. Quitting the app during an active meeting also triggers a graceful save.
 
 ## Configuration
@@ -234,8 +236,10 @@ Backend settings in `backend/app/config.py`:
 | `whisper_model` | `mlx-community/whisper-small-mlx` | Whisper model for transcription |
 | `llm_debounce_seconds` | `10.0` | Minimum seconds between copilot LLM calls |
 | `transcript_window_minutes` | `5.0` | How much recent transcript to send to the LLM |
-| `max_buffer_seconds` | `15.0` | Max audio buffer before forced transcription |
+| `max_buffer_seconds` | `30.0` | Max audio buffer before forced transcription |
 | `notes_max_context_chars` | `3000` | Max characters of notes context sent to LLM |
+| `llm_max_transcript_chars` | `12000` | Max transcript chars sent to copilot LLM |
+| `speaker_threshold` | `0.08` | Cosine distance threshold for speaker change detection |
 | `whisper_no_speech_threshold` | `0.6` | Filter non-speech segments (music, noise) |
 | `whisper_logprob_threshold` | `-1.0` | Filter low-confidence Whisper output |
 | `whisper_compression_threshold` | `2.4` | Filter repetitive hallucinations |

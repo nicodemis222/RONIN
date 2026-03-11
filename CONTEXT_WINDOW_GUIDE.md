@@ -47,8 +47,8 @@ lms load --context-length 32768 <model-identifier>
 RONIN has three layers of defense against context overflow:
 
 ### Layer 1: Transcript Truncation
-- **Copilot** (live): Keeps only the most recent ~12,000 chars (tail-only, ~5 minutes of speech)
-- **Summary** (end of meeting): Keeps 15% from the start + 85% from the end (for backend LLM providers)
+- **Copilot** (live): Default budget of 12,000 chars (tail-only, ~5 minutes of speech). Auto-scales up to 60,000 chars for large-context models (128K+ tokens).
+- **Summary** (end of meeting): Default budget of 200,000 chars. When truncation is needed, keeps 15% from the start + 85% from the end — the end of meetings (decisions, wrap-up) is more valuable than the beginning (intros). Auto-scales up to 500,000 chars for large-context models.
 - **Apple Intelligence summary**: Uses chunked map-reduce — no truncation, entire transcript is processed
 
 ### Layer 2: Retry with Halving
@@ -60,13 +60,14 @@ If the LLM returns a 400 error, RONIN automatically:
 ### Layer 3: Auto-Detection (NEW)
 RONIN now queries LM Studio at startup to detect the loaded model's context length and automatically calibrates its transcript budgets:
 
-| Detected n_ctx | Copilot Budget | Summary Budget | 1-hr Meeting? |
+| Detected n_ctx | Copilot Budget | Summary Budget | 1-hr Meeting (~63K chars) |
 |---------------|---------------|----------------|---------------|
 | 4,096          | ~5,700 chars   | ~11,500 chars  | ⚠️ Heavy truncation |
-| 8,192          | ~11,500 chars  | ~23,000 chars  | 🟡 Partial (37%) |
-| 16,384         | ~23,000 chars  | ~46,000 chars  | 🟡 Most content (73%) |
-| 32,768         | ~60,000 chars  | ~120,000 chars | ✅ Full meeting |
-| 65,536+        | ~60,000 chars  | ~500,000 chars | ✅ Full 2-hour+ meetings |
+| 8,192          | ~11,500 chars  | ~23,000 chars  | 🟡 Partial (~37%) |
+| 16,384         | ~23,000 chars  | ~46,000 chars  | 🟡 Most content (~73%) |
+| 32,768         | ~60,000 chars  | ~91,000 chars  | ✅ Full meeting |
+| 65,536+        | ~60,000 chars  | ~183,000 chars | ✅ Full 2-hour+ meetings |
+| 131,072+       | ~60,000 chars  | ~366,000 chars | ✅ Full day-long meetings |
 
 ## Architecture for Long Meetings
 
@@ -81,7 +82,7 @@ For meetings exceeding 1 hour, the system uses a **sliding window** approach:
 │  (real-time, tail-only ~5 min window)            │
 ├──────────────────────────────────────────────────┤
 │  Summary (backend): first 15% + last 85%         │
-│  (intros + decisions/wrap-up)                    │
+│  (intros + decisions/wrap-up, 200K char default) │
 ├──────────────────────────────────────────────────┤
 │  Summary (Apple Intelligence): chunked map-reduce│
 │  (entire transcript, no truncation)              │

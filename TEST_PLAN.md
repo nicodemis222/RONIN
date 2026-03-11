@@ -1,7 +1,7 @@
 # RONIN Meeting Copilot — v1.0 Test Report
 
-> **Date**: 2026-03-06
-> **Version**: 1.0.0
+> **Date**: 2026-03-11
+> **Version**: 1.5.3
 > **Platform**: macOS 15+, Apple Silicon (M1+)
 > **Python**: 3.14.2 | **Swift**: 5.10 | **Xcode**: 16+
 
@@ -382,16 +382,19 @@ Full pipeline test using macOS TTS-generated speech audio with auth token suppor
 | 21 | No summary progress feedback | 4-phase progress bar |
 | 22 | Single WebSocket connection leak | Connection counter + limit enforcement |
 | 23 | No startup dependency checks | 5-point dependency checklist |
+| 24 | Transcript lost on continuous speech (buffer overflow) | Forced FINAL at 85% buffer capacity prevents text loss from sustained speech exceeding max_buffer_seconds |
+| 25 | Audio lost during Whisper processing (2-5s gap per cycle) | Buffer grows up to 2× during active transcription; post-FINAL slice preserves audio that arrived during Whisper processing |
+| 26 | Export transcript incomplete (race condition) | WebSocket flush completes before /meeting/end API is called; 2s delay + disconnect timing ensures all audio is transcribed before export |
 
 ---
 
 ## Summary
 
-**v1.0.0 — Release Ready**
+**v1.5.3 — Release Ready**
 
 - 128 unit tests passing (0 failures)
 - 12 end-to-end integration tests passing (7 API + 5 audio pipeline)
 - 12 UX acceptance test suites verified
 - Swift Debug + Release builds clean
-- DMG distribution build verified (657 MB)
-- All 23 tracked issues resolved
+- DMG distribution build verified
+- All 26 tracked issues resolved
