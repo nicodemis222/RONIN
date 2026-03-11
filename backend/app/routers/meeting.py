@@ -158,6 +158,7 @@ async def health(request: Request, details: bool = False):
     meeting = request.app.state.meeting
     active = meeting.get_active_session()
     deps["meeting"] = {
+        "status": "active" if active else "idle",
         "active": active is not None,
         "segments": len(active.transcript_segments) if active else 0,
     }

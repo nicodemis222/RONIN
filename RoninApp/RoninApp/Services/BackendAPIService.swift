@@ -65,7 +65,7 @@ class BackendAPIService {
         let dependencies: [String: DependencyInfo]
 
         struct DependencyInfo: Decodable {
-            let status: String
+            let status: String?
             let provider: String?
             let detail: String?
             let model: String?
