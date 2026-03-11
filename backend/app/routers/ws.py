@@ -35,6 +35,41 @@ def reset_connections() -> None:
     logger.info("WebSocket connection tracker reset")
 
 
+async def _flush_pending_audio(transcription, session, conn_id: str):
+    """Force-transcribe any remaining audio in the buffer.
+
+    Called on WebSocket disconnect so the last seconds of speech are not
+    lost. Without this, the audio sitting in the buffer when the user
+    clicks "End Meeting" would be silently discarded.
+    """
+    buf_duration = len(transcription.audio_buffer) / 16000
+    if buf_duration < 0.5:
+        logger.info(f"Flush: buffer too short ({buf_duration:.1f}s) — skipping (conn={conn_id})")
+        return
+
+    logger.info(f"Flush: force-transcribing {buf_duration:.1f}s of remaining audio (conn={conn_id})")
+    try:
+        # Force transcription regardless of speech boundary detection
+        result = await transcription._transcribe_buffer()
+        if result and result.get("text", "").strip():
+            result["is_final"] = True
+            segment = TranscriptSegment(
+                text=result["text"],
+                full_text=result.get("full_text", result["text"]),
+                timestamp=result["timestamp"],
+                speaker=result.get("speaker", ""),
+                is_final=True,
+            )
+            session.append_transcript(segment)
+            logger.info(
+                f"Flush: saved final segment ({len(result['text'])} chars) (conn={conn_id})"
+            )
+        else:
+            logger.info(f"Flush: no usable text from remaining audio (conn={conn_id})")
+    except Exception as e:
+        logger.warning(f"Flush: transcription failed: {e} (conn={conn_id})")
+
+
 @router.websocket("/ws/audio")
 async def audio_websocket(websocket: WebSocket):
     conn_id = uuid.uuid4().hex[:8]
@@ -198,11 +233,16 @@ async def audio_websocket(websocket: WebSocket):
         if copilot_task and not copilot_task.done():
             copilot_task.cancel()
             logger.info(f"Cancelled in-flight copilot task on disconnect (conn={conn_id})")
+
+        # Flush: force-transcribe any remaining audio buffer so the last
+        # few seconds of speech are captured before the session ends.
+        await _flush_pending_audio(transcription, session, conn_id)
         transcription.reset_buffer()
     except Exception as e:
         logger.error(f"WebSocket handler error after {chunks_received} chunks: {e} (conn={conn_id})", exc_info=True)
         if copilot_task and not copilot_task.done():
             copilot_task.cancel()
+        await _flush_pending_audio(transcription, session, conn_id)
         transcription.reset_buffer()
     finally:
         _active_connections.discard(conn_id)

@@ -219,6 +219,8 @@ struct PostMeetingView: View {
             viewModel.nativeCopilotService = copilotVM.nativeCopilotService
             viewModel.meetingConfig = copilotVM.meetingConfig
             viewModel.meetingNotes = copilotVM.accumulatedNotes
+            // Pass frontend transcript as fallback (in case backend missed final segments)
+            viewModel.frontendTranscriptSegments = copilotVM.transcriptSegments
             if let sessionId = appState.sessionId {
                 Task {
                     await viewModel.loadSummary(sessionId: sessionId)

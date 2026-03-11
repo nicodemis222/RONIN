@@ -337,17 +337,21 @@ class LiveCopilotViewModel: ObservableObject {
         }
         hasEnded = true
 
-        // Tear down services immediately (these are not @Published)
+        // Stop sending new audio immediately
         audioService?.stopCapture()
-        wsService?.disconnect()
         timer?.invalidate()
         timer = nil
         nativeCopilotService?.reset()
 
-        // Defer @Published changes to next run-loop tick
-        DispatchQueue.main.async { [weak self] in
+        // Delay WebSocket disconnect briefly so the backend can flush
+        // its pending audio buffer (force-transcribe the last few seconds).
+        // The backend's _flush_pending_audio() runs on disconnect, so
+        // we need the connection alive long enough for that to complete.
+        addDebug("Stopping audio — waiting for backend flush before disconnect...")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.wsService?.disconnect()
             self?.isConnected = false
-            self?.addDebug("endMeeting() completed")
+            self?.addDebug("endMeeting() completed — WebSocket disconnected")
         }
     }
 

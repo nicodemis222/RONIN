@@ -84,6 +84,11 @@ class PostMeetingViewModel: ObservableObject {
     var meetingConfig: MeetingConfig?
     var meetingNotes: String = ""
 
+    /// Frontend-accumulated transcript segments, passed from LiveCopilotViewModel.
+    /// Used as a fallback if the backend returns an empty/shorter transcript
+    /// (e.g., due to race condition between WebSocket disconnect and final transcription).
+    var frontendTranscriptSegments: [TranscriptSegment] = []
+
     private let backendAPI = BackendAPIService()
 
     /// Set the auth token received from BackendProcessService.
@@ -101,10 +106,28 @@ class PostMeetingViewModel: ObservableObject {
         // Start a timer to update elapsed time and cycle phases
         startProgressTimer()
 
+        // Build frontend transcript from accumulated segments (fallback source).
+        // Only include final segments (same logic as backend's full_transcript).
+        let frontendTranscript = frontendTranscriptSegments
+            .filter { $0.isFinal }
+            .map { segment -> String in
+                let speaker = segment.speaker.isEmpty ? "" : " \(segment.speaker):"
+                return "[\(segment.timestamp)]\(speaker) \(segment.text)"
+            }
+            .joined(separator: "\n")
+
         do {
             // Always call backend to get transcript (and save it to disk)
             let result = try await backendAPI.endMeeting(sessionId: sessionId)
-            fullTranscript = result.full_transcript
+
+            // Use whichever transcript is longer — the backend might have
+            // missed the last few seconds due to WebSocket disconnect timing,
+            // or the frontend might have fewer segments if it missed early ones.
+            if result.full_transcript.count >= frontendTranscript.count {
+                fullTranscript = result.full_transcript
+            } else {
+                fullTranscript = frontendTranscript
+            }
 
             // If Apple Intelligence is active, generate summary locally
             if let service = nativeCopilotService, let config = meetingConfig, service.hasProvider {
